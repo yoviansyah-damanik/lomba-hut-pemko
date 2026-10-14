@@ -363,6 +363,7 @@
         @endif
 
         <p class="hidden print:block mt-6 pt-3 border-t border-gray-300 text-center text-[10px] text-gray-400">
+            {{ __('Bidang Humas dan Informatika Kwartir Cabang Gerakan Pramuka Kota Padangsidimpuan') }} &middot;
             {{ __('Dicetak melalui :app (:url) pada :time', ['app' => config('app.name'), 'url' => config('app.url'), 'time' => now()->translatedFormat('d M Y H:i')]) }}
         </p>
 

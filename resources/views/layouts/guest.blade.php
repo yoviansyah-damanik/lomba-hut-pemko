@@ -55,7 +55,7 @@
                     </div>
                 </div>
 
-                <p class="relative text-xs text-red-200">&copy; {{ date('Y') }} {{ config('app.name') }} &middot; {{ config('app.owner') }}</p>
+                <p class="relative text-xs text-red-200">&copy; {{ date('Y') }} {{ config('app.name') }} &middot; {{ __('Bidang Humas dan Informatika Kwartir Cabang Gerakan Pramuka Kota Padangsidimpuan') }}</p>
             </div>
 
             <!-- Form panel -->
@@ -89,7 +89,7 @@
 
                 <!-- Copyright — stays pinned at the bottom on mobile, where the branding panel is hidden -->
                 <p class="lg:hidden absolute bottom-4 inset-x-0 text-center text-xs text-gray-400 dark:text-gray-500 px-4">
-                    &copy; {{ date('Y') }} {{ config('app.name') }} &middot; {{ config('app.owner') }}
+                    &copy; {{ date('Y') }} {{ config('app.name') }} &middot; {{ __('Bidang Humas dan Informatika Kwartir Cabang Gerakan Pramuka Kota Padangsidimpuan') }}
                 </p>
             </div>
         </div>

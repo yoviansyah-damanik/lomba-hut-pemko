@@ -12,7 +12,7 @@
         @vite(['resources/css/app.css', 'resources/js/app.js'])
     </head>
     <body class="font-sans antialiased">
-        <div class="min-h-screen bg-gray-100 dark:bg-gray-900 pt-16 pb-20 sm:pb-0 print:pt-0 print:pb-0 print:bg-white">
+        <div class="min-h-screen bg-gray-100 dark:bg-gray-900 pt-16 pb-20 sm:pb-0 print:pt-0 print:pb-0 print:bg-white flex flex-col">
             <div class="print:hidden">
                 <livewire:layout.navigation />
             </div>
@@ -27,9 +27,16 @@
             @endif
 
             <!-- Page Content -->
-            <main>
+            <main class="flex-1">
                 {{ $slot }}
             </main>
+
+            <!-- Footer -->
+            <footer class="mt-auto py-6 border-t border-gray-200/60 dark:border-gray-800/60 text-center text-xs text-gray-500 dark:text-gray-400 print:hidden mb-16 sm:mb-0">
+                <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+                    <p>&copy; {{ date('Y') }} {{ config('app.name') }} &middot; {{ __('Bidang Humas dan Informatika Kwartir Cabang Gerakan Pramuka Kota Padangsidimpuan') }}</p>
+                </div>
+            </footer>
         </div>
     </body>
 </html>

@@ -75,7 +75,7 @@
 
             {{-- Footer Broadcast Credit --}}
             <footer class="py-4 border-t border-slate-200/60 dark:border-slate-800/60 text-center text-xs text-slate-400 dark:text-slate-500">
-                <p>&copy; {{ date('Y') }} {{ config('app.name') }} &middot; {{ __('Sistem Penilaian Cepat & Papan Peringkat Realtime') }}</p>
+                <p>&copy; {{ date('Y') }} {{ config('app.name') }} &middot; {{ __('Bidang Humas dan Informatika Kwartir Cabang Gerakan Pramuka Kota Padangsidimpuan') }}</p>
             </footer>
         </div>
     </body>

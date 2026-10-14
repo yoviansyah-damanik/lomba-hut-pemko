@@ -226,7 +226,7 @@ class Recap extends Component
         $size = 7;
 
         $left = __(':owner &mdash; :app (:url)', [
-            'owner' => config('app.owner'),
+            'owner' => 'Bidang Humas dan Informatika Kwartir Cabang Gerakan Pramuka Kota Padangsidimpuan',
             'app' => config('app.name'),
             'url' => config('app.url'),
         ]);
