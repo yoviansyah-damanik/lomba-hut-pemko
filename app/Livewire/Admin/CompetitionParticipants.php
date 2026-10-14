@@ -9,7 +9,7 @@ use Livewire\Component;
 
 class CompetitionParticipants extends Component
 {
-    public const SCHOOL_TYPES = ['SD', 'SMP', 'SMA'];
+    public const SCHOOL_TYPES = ['SD', 'SMP', 'SMA', 'Umum'];
 
     public string $competitionId;
 
@@ -17,7 +17,7 @@ class CompetitionParticipants extends Component
 
     // Generate slot massal
     /** @var array<string, int> */
-    public array $slotCounts = ['SD' => 0, 'SMP' => 0, 'SMA' => 0];
+    public array $slotCounts = ['SD' => 0, 'SMP' => 0, 'SMA' => 0, 'Umum' => 0];
 
     public int $nppDigits = 3;
 
@@ -90,7 +90,7 @@ class CompetitionParticipants extends Component
         }
 
         if ($generated) {
-            $this->slotCounts = ['SD' => 0, 'SMP' => 0, 'SMA' => 0];
+            $this->slotCounts = ['SD' => 0, 'SMP' => 0, 'SMA' => 0, 'Umum' => 0];
             $this->activeTab = 'registered';
         }
     }

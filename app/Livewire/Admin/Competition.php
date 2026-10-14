@@ -70,11 +70,60 @@ class Competition extends Component
 
     public string $criterion_description = '';
 
+    public int $criterion_min_score = 0;
+
+    public int $criterion_max_score = 100;
+
+    public bool $has_sub_items = false;
+
+    /** @var array<int, array{id?: string|null, name: string, min_score: int, max_score: int}> */
+    public array $subItems = [];
+
+    public const SCHOOL_TYPES = ['SD', 'SMP', 'SMA', 'Umum'];
+
     /** @var array<string> */
-    public array $criterionSchoolTypes = ['SD', 'SMP', 'SMA'];
+    public array $criterionSchoolTypes = ['SD', 'SMP', 'SMA', 'Umum'];
 
     /** @var array<string, array<string>> */
-    public array $judgeIdsBySchoolType = ['SD' => [], 'SMP' => [], 'SMA' => []];
+    public array $judgeIdsBySchoolType = ['SD' => [], 'SMP' => [], 'SMA' => [], 'Umum' => []];
+
+    public function updatedHasSubItems(bool $value): void
+    {
+        if ($value && empty($this->subItems)) {
+            $this->addSubItem();
+        }
+    }
+
+    public function addSubItem(): void
+    {
+        $this->subItems[] = [
+            'id' => null,
+            'name' => '',
+            'min_score' => 0,
+            'max_score' => 25,
+        ];
+        $this->recalculateMinMaxFromSubItems();
+    }
+
+    public function removeSubItem(int $index): void
+    {
+        unset($this->subItems[$index]);
+        $this->subItems = array_values($this->subItems);
+        $this->recalculateMinMaxFromSubItems();
+    }
+
+    public function updatedSubItems(): void
+    {
+        $this->recalculateMinMaxFromSubItems();
+    }
+
+    public function recalculateMinMaxFromSubItems(): void
+    {
+        if ($this->has_sub_items && ! empty($this->subItems)) {
+            $this->criterion_min_score = (int) collect($this->subItems)->sum('min_score');
+            $this->criterion_max_score = (int) collect($this->subItems)->sum('max_score');
+        }
+    }
 
     // Modal daftar juri lengkap
     public bool $showJudgesModal = false;
@@ -189,9 +238,11 @@ class Competition extends Component
 
     public function createCriterion(): void
     {
-        $this->reset(['editingCriterion', 'criterion_name', 'criterion_description']);
-        $this->criterionSchoolTypes = ['SD', 'SMP', 'SMA'];
-        $this->judgeIdsBySchoolType = ['SD' => [], 'SMP' => [], 'SMA' => []];
+        $this->reset(['editingCriterion', 'criterion_name', 'criterion_description', 'has_sub_items', 'subItems']);
+        $this->criterion_min_score = 0;
+        $this->criterion_max_score = 100;
+        $this->criterionSchoolTypes = ['SD', 'SMP', 'SMA', 'Umum'];
+        $this->judgeIdsBySchoolType = ['SD' => [], 'SMP' => [], 'SMA' => [], 'Umum' => []];
         $this->showCriterionModal = true;
     }
 
@@ -200,9 +251,25 @@ class Competition extends Component
         $this->editingCriterion = $criterion;
         $this->criterion_name = $criterion->name;
         $this->criterion_description = (string) $criterion->description;
+        $this->criterion_min_score = $criterion->min_score ?? 0;
+        $this->criterion_max_score = $criterion->max_score ?? 100;
         $this->criterionSchoolTypes = $criterion->school_types;
 
-        $this->judgeIdsBySchoolType = ['SD' => [], 'SMP' => [], 'SMA' => []];
+        $items = $criterion->items()->orderBy('order')->get();
+        if ($items->isNotEmpty()) {
+            $this->has_sub_items = true;
+            $this->subItems = $items->map(fn ($item) => [
+                'id' => $item->id,
+                'name' => $item->name,
+                'min_score' => $item->min_score,
+                'max_score' => $item->max_score,
+            ])->all();
+        } else {
+            $this->has_sub_items = false;
+            $this->subItems = [];
+        }
+
+        $this->judgeIdsBySchoolType = ['SD' => [], 'SMP' => [], 'SMA' => [], 'Umum' => []];
         foreach ($criterion->judges as $judge) {
             $this->judgeIdsBySchoolType[$judge->pivot->school_type][] = $judge->id;
         }
@@ -212,11 +279,36 @@ class Competition extends Component
 
     public function saveCriterion(): void
     {
-        $validated = $this->validate([
+        $rules = [
             'criterion_name' => ['required', 'string', 'max:255'],
             'criterion_description' => ['nullable', 'string'],
             'criterionSchoolTypes' => ['required', 'array', 'min:1'],
-            'criterionSchoolTypes.*' => ['in:SD,SMP,SMA'],
+            'criterionSchoolTypes.*' => ['in:SD,SMP,SMA,Umum'],
+        ];
+
+        if ($this->has_sub_items) {
+            $rules['subItems'] = ['required', 'array', 'min:1'];
+            $rules['subItems.*.name'] = ['required', 'string', 'max:255'];
+            $rules['subItems.*.min_score'] = ['required', 'integer', 'min:0'];
+            $rules['subItems.*.max_score'] = ['required', 'integer', 'gt:subItems.*.min_score'];
+            $this->recalculateMinMaxFromSubItems();
+        } else {
+            $rules['criterion_min_score'] = ['required', 'integer', 'min:0'];
+            $rules['criterion_max_score'] = ['required', 'integer', 'gt:criterion_min_score'];
+        }
+
+        $validated = $this->validate($rules, [
+            'criterion_max_score.gt' => __('Nilai maksimal harus lebih besar dari nilai minimal (:min).', ['min' => $this->criterion_min_score]),
+            'subItems.*.max_score.gt' => __('Nilai maksimal sub-item harus lebih besar dari nilai minimalnya.'),
+            'subItems.min' => __('Tambahkan minimal satu sub-item jika mode rubrik diaktifkan.'),
+        ], [
+            'criterion_name' => __('nama kriteria'),
+            'criterion_description' => __('deskripsi kriteria'),
+            'criterion_min_score' => __('nilai minimal'),
+            'criterion_max_score' => __('nilai maksimal'),
+            'subItems.*.name' => __('nama sub-item'),
+            'subItems.*.min_score' => __('nilai minimal sub-item'),
+            'subItems.*.max_score' => __('nilai maksimal sub-item'),
         ]);
 
         foreach ($validated['criterionSchoolTypes'] as $type) {
@@ -232,8 +324,42 @@ class Competition extends Component
         $criterion = $this->editingCriterion ?? new Criterion(['competition_id' => $this->expandedId]);
         $criterion->name = $validated['criterion_name'];
         $criterion->description = $validated['criterion_description'];
+        $criterion->min_score = $this->has_sub_items ? (int) collect($this->subItems)->sum('min_score') : $validated['criterion_min_score'];
+        $criterion->max_score = $this->has_sub_items ? (int) collect($this->subItems)->sum('max_score') : $validated['criterion_max_score'];
         $criterion->school_types = $validated['criterionSchoolTypes'];
         $criterion->save();
+
+        // Sinkronisasi sub-items
+        if ($this->has_sub_items) {
+            $keepIds = [];
+            foreach ($this->subItems as $index => $itemData) {
+                if (! empty($itemData['id'])) {
+                    $item = $criterion->items()->find($itemData['id']);
+                    if ($item) {
+                        $item->update([
+                            'name' => $itemData['name'],
+                            'min_score' => (int) $itemData['min_score'],
+                            'max_score' => (int) $itemData['max_score'],
+                            'order' => $index,
+                        ]);
+                        $keepIds[] = $item->id;
+                        continue;
+                    }
+                }
+
+                $newItem = $criterion->items()->create([
+                    'name' => $itemData['name'],
+                    'min_score' => (int) $itemData['min_score'],
+                    'max_score' => (int) $itemData['max_score'],
+                    'order' => $index,
+                ]);
+                $keepIds[] = $newItem->id;
+            }
+
+            $criterion->items()->whereNotIn('id', $keepIds)->delete();
+        } else {
+            $criterion->items()->delete();
+        }
 
         $criterion->judges()->newPivotStatement()->where('criterion_id', $criterion->id)->delete();
 
@@ -255,9 +381,11 @@ class Competition extends Component
         }
 
         $this->showCriterionModal = false;
-        $this->reset(['editingCriterion', 'criterion_name', 'criterion_description']);
-        $this->criterionSchoolTypes = ['SD', 'SMP', 'SMA'];
-        $this->judgeIdsBySchoolType = ['SD' => [], 'SMP' => [], 'SMA' => []];
+        $this->reset(['editingCriterion', 'criterion_name', 'criterion_description', 'has_sub_items', 'subItems']);
+        $this->criterion_min_score = 0;
+        $this->criterion_max_score = 100;
+        $this->criterionSchoolTypes = ['SD', 'SMP', 'SMA', 'Umum'];
+        $this->judgeIdsBySchoolType = ['SD' => [], 'SMP' => [], 'SMA' => [], 'Umum' => []];
     }
 
     public function deleteCriterion(Criterion $criterion): void
@@ -288,7 +416,10 @@ class Competition extends Component
                 ->latest('start_time')
                 ->paginate(10),
             'expandedCriteria' => $this->expandedId
-                ? Criterion::where('competition_id', $this->expandedId)->with(['judges' => fn ($query) => $query->orderBy('name')])->orderBy('name')->get()
+                ? Criterion::where('competition_id', $this->expandedId)
+                    ->with(['judges' => fn ($query) => $query->orderBy('name'), 'items'])
+                    ->orderBy('name')
+                    ->get()
                 : collect(),
             'judges' => User::where('role', 'judge')->orderBy('name')->get(),
         ]);

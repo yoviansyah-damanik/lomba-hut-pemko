@@ -4,8 +4,12 @@ namespace App\Livewire\Evaluation;
 
 use App\Models\Criterion;
 use App\Models\Evaluation;
+use App\Models\EvaluationItem;
 use App\Models\Registration;
+use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\Auth;
+use Illuminate\Support\Facades\DB;
+use Illuminate\Support\Str;
 use Livewire\Component;
 
 class CriterionForm extends Component
@@ -17,10 +21,16 @@ class CriterionForm extends Component
     /** @var array<string, int|null> */
     public array $scores = [];
 
+    /** @var array<string, array<string, int|null>> */
+    public array $itemScores = [];
+
     /** @var array<string, string> */
     public array $notes = [];
 
     public bool $showConfirm = false;
+
+    /** @var Collection<int, Criterion>|null */
+    private ?Collection $criteriaCache = null;
 
     public function mount(Registration $registration, string $competitionId): void
     {
@@ -32,12 +42,34 @@ class CriterionForm extends Component
 
         $existing = Evaluation::where('user_id', $judge->id)
             ->where('registration_id', $registration->id)
+            ->with('items')
             ->get()
             ->keyBy('criterion_id');
 
         foreach ($this->activeCriteria() as $criterion) {
-            $this->scores[$criterion->id] = $existing[$criterion->id]->score ?? null;
-            $this->notes[$criterion->id] = $existing[$criterion->id]->notes ?? '';
+            $eval = $existing[$criterion->id] ?? null;
+            $this->scores[$criterion->id] = $eval->score ?? null;
+            $this->notes[$criterion->id] = $eval->notes ?? '';
+
+            if ($criterion->items->isNotEmpty()) {
+                $existingItems = $eval ? $eval->items->keyBy('criterion_item_id') : collect();
+                $this->itemScores[$criterion->id] = [];
+                $sum = 0;
+                $hasAny = false;
+
+                foreach ($criterion->items as $item) {
+                    $itemVal = $existingItems[$item->id]->score ?? null;
+                    $this->itemScores[$criterion->id][$item->id] = $itemVal;
+                    if ($itemVal !== null) {
+                        $sum += (int) $itemVal;
+                        $hasAny = true;
+                    }
+                }
+
+                if ($hasAny) {
+                    $this->scores[$criterion->id] = $sum;
+                }
+            }
         }
     }
 
@@ -47,19 +79,76 @@ class CriterionForm extends Component
      *
      * @return \Illuminate\Support\Collection<int, Criterion>
      */
-    public function activeCriteria()
+    public function activeCriteria(): Collection
     {
+        if ($this->criteriaCache !== null) {
+            return $this->criteriaCache;
+        }
+
         /** @var \App\Models\User $judge */
         $judge = Auth::user();
 
-        return $judge->criteria()
+        return $this->criteriaCache = $judge->criteria()
             ->wherePivot('school_type', $this->registration->school_type)
             ->where('competition_id', $this->competitionId)
-            ->with('competition')
+            ->with(['competition', 'items'])
             ->get()
             ->filter(fn (Criterion $criterion) => $criterion->competition->isActive())
             ->sortBy('name')
             ->values();
+    }
+
+    public function updatedItemScores($value, $key): void
+    {
+        $parts = explode('.', (string) $key);
+        if (! empty($parts[0])) {
+            $this->recalculateCriterionScore($parts[0]);
+        }
+    }
+
+    public function recalculateCriterionScore(string $criterionId): void
+    {
+        if (isset($this->itemScores[$criterionId])) {
+            $sum = 0;
+            $hasAny = false;
+            foreach ($this->itemScores[$criterionId] as $val) {
+                if ($val !== null && $val !== '') {
+                    $sum += (int) $val;
+                    $hasAny = true;
+                }
+            }
+            $this->scores[$criterionId] = $hasAny ? $sum : null;
+        }
+    }
+
+    public function incrementItemScore(string $criterionId, string $itemId): void
+    {
+        $criterion = $this->activeCriteria()->firstWhere('id', $criterionId);
+        $item = $criterion?->items->firstWhere('id', $itemId);
+        if (! $item) {
+            return;
+        }
+
+        $min = $item->min_score;
+        $max = $item->max_score;
+        $current = $this->itemScores[$criterionId][$itemId] ?? ($min - 1);
+        $this->itemScores[$criterionId][$itemId] = min($max, ((int) $current) + 1);
+        $this->recalculateCriterionScore($criterionId);
+    }
+
+    public function decrementItemScore(string $criterionId, string $itemId): void
+    {
+        $criterion = $this->activeCriteria()->firstWhere('id', $criterionId);
+        $item = $criterion?->items->firstWhere('id', $itemId);
+        if (! $item) {
+            return;
+        }
+
+        $min = $item->min_score;
+        $max = $item->max_score;
+        $current = $this->itemScores[$criterionId][$itemId] ?? ($min + 1);
+        $this->itemScores[$criterionId][$itemId] = max($min, ((int) $current) - 1);
+        $this->recalculateCriterionScore($criterionId);
     }
 
     /** @return array<string, array<string>> */
@@ -67,9 +156,22 @@ class CriterionForm extends Component
     {
         $rules = [];
 
-        foreach ($this->activeCriteria()->pluck('id') as $id) {
-            $rules["scores.{$id}"] = ['required', 'integer', 'min:'.Criterion::MIN_SCORE, 'max:'.Criterion::MAX_SCORE];
-            $rules["notes.{$id}"] = ['nullable', 'string'];
+        foreach ($this->activeCriteria() as $criterion) {
+            if ($criterion->items->isNotEmpty()) {
+                foreach ($criterion->items as $item) {
+                    $rules["itemScores.{$criterion->id}.{$item->id}"] = [
+                        'required',
+                        'integer',
+                        'min:'.$item->min_score,
+                        'max:'.$item->max_score,
+                    ];
+                }
+            } else {
+                $min = $criterion->min_score ?? Criterion::DEFAULT_MIN_SCORE;
+                $max = $criterion->max_score ?? Criterion::DEFAULT_MAX_SCORE;
+                $rules["scores.{$criterion->id}"] = ['required', 'integer', 'min:'.$min, 'max:'.$max];
+            }
+            $rules["notes.{$criterion->id}"] = ['nullable', 'string'];
         }
 
         return $rules;
@@ -81,7 +183,13 @@ class CriterionForm extends Component
         $attributes = [];
 
         foreach ($this->activeCriteria() as $criterion) {
-            $attributes["scores.{$criterion->id}"] = __('nilai ":name"', ['name' => $criterion->name]);
+            if ($criterion->items->isNotEmpty()) {
+                foreach ($criterion->items as $item) {
+                    $attributes["itemScores.{$criterion->id}.{$item->id}"] = __('nilai ":item"', ['item' => $item->name]);
+                }
+            } else {
+                $attributes["scores.{$criterion->id}"] = __('nilai ":name"', ['name' => $criterion->name]);
+            }
             $attributes["notes.{$criterion->id}"] = __('catatan ":name"', ['name' => $criterion->name]);
         }
 
@@ -90,14 +198,22 @@ class CriterionForm extends Component
 
     public function incrementScore(string $criterionId): void
     {
-        $current = $this->scores[$criterionId] ?? (Criterion::MIN_SCORE - 1);
-        $this->scores[$criterionId] = min(Criterion::MAX_SCORE, ((int) $current) + 1);
+        $criterion = $this->activeCriteria()->firstWhere('id', $criterionId);
+        $min = $criterion?->min_score ?? Criterion::DEFAULT_MIN_SCORE;
+        $max = $criterion?->max_score ?? Criterion::DEFAULT_MAX_SCORE;
+
+        $current = $this->scores[$criterionId] ?? ($min - 1);
+        $this->scores[$criterionId] = min($max, ((int) $current) + 1);
     }
 
     public function decrementScore(string $criterionId): void
     {
-        $current = $this->scores[$criterionId] ?? (Criterion::MIN_SCORE + 1);
-        $this->scores[$criterionId] = max(Criterion::MIN_SCORE, ((int) $current) - 1);
+        $criterion = $this->activeCriteria()->firstWhere('id', $criterionId);
+        $min = $criterion?->min_score ?? Criterion::DEFAULT_MIN_SCORE;
+        $max = $criterion?->max_score ?? Criterion::DEFAULT_MAX_SCORE;
+
+        $current = $this->scores[$criterionId] ?? ($min + 1);
+        $this->scores[$criterionId] = max($min, ((int) $current) - 1);
     }
 
     public function review(): void
@@ -118,18 +234,66 @@ class CriterionForm extends Component
         /** @var \App\Models\User $judge */
         $judge = Auth::user();
 
-        foreach ($this->activeCriteria()->pluck('id') as $id) {
-            Evaluation::updateOrCreate(
-                [
-                    'user_id' => $judge->id,
-                    'registration_id' => $this->registration->id,
-                    'criterion_id' => $id,
-                ],
-                [
-                    'score' => $this->scores[$id],
-                    'notes' => $this->notes[$id] ?: null,
-                ]
-            );
+        $criteria = $this->activeCriteria();
+        $now = now();
+        $records = [];
+
+        foreach ($criteria as $criterion) {
+            $id = $criterion->id;
+            if ($criterion->items->isNotEmpty()) {
+                $this->recalculateCriterionScore($id);
+            }
+
+            $records[] = [
+                'id' => (string) Str::uuid(),
+                'user_id' => $judge->id,
+                'registration_id' => $this->registration->id,
+                'criterion_id' => $id,
+                'score' => (int) $this->scores[$id],
+                'notes' => filled($this->notes[$id] ?? null) ? $this->notes[$id] : null,
+                'created_at' => $now,
+                'updated_at' => $now,
+            ];
+        }
+
+        if (! empty($records)) {
+            DB::transaction(function () use ($records, $criteria, $judge, $now) {
+                Evaluation::upsert(
+                    $records,
+                    ['user_id', 'registration_id', 'criterion_id'],
+                    ['score', 'notes', 'updated_at']
+                );
+
+                // Simpan rincian nilai sub-item ke evaluation_items
+                foreach ($criteria as $criterion) {
+                    if ($criterion->items->isNotEmpty()) {
+                        $evaluation = Evaluation::where('user_id', $judge->id)
+                            ->where('registration_id', $this->registration->id)
+                            ->where('criterion_id', $criterion->id)
+                            ->first();
+
+                        if ($evaluation) {
+                            $itemRecords = [];
+                            foreach ($criterion->items as $item) {
+                                $scoreVal = (int) ($this->itemScores[$criterion->id][$item->id] ?? 0);
+                                $itemRecords[] = [
+                                    'id' => (string) Str::uuid(),
+                                    'evaluation_id' => $evaluation->id,
+                                    'criterion_item_id' => $item->id,
+                                    'score' => $scoreVal,
+                                    'created_at' => $now,
+                                    'updated_at' => $now,
+                                ];
+                            }
+                            EvaluationItem::upsert(
+                                $itemRecords,
+                                ['evaluation_id', 'criterion_item_id'],
+                                ['score', 'updated_at']
+                            );
+                        }
+                    }
+                }
+            });
         }
 
         $this->showConfirm = false;

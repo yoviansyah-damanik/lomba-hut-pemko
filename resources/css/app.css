@@ -1,3 +1,68 @@
 @tailwind base;
 @tailwind components;
 @tailwind utilities;
+
+@keyframes float-gentle {
+    0%, 100% {
+        transform: translateY(0px);
+    }
+    50% {
+        transform: translateY(-8px);
+    }
+}
+
+@keyframes glow-gold {
+    0%, 100% {
+        box-shadow: 0 0 25px rgba(234, 179, 8, 0.35), inset 0 0 15px rgba(254, 240, 138, 0.25);
+    }
+    50% {
+        box-shadow: 0 0 45px rgba(234, 179, 8, 0.65), inset 0 0 25px rgba(254, 240, 138, 0.45);
+    }
+}
+
+@keyframes glow-silver {
+    0%, 100% {
+        box-shadow: 0 0 20px rgba(148, 163, 184, 0.3);
+    }
+    50% {
+        box-shadow: 0 0 35px rgba(148, 163, 184, 0.5);
+    }
+}
+
+@keyframes glow-bronze {
+    0%, 100% {
+        box-shadow: 0 0 20px rgba(217, 119, 6, 0.3);
+    }
+    50% {
+        box-shadow: 0 0 35px rgba(217, 119, 6, 0.5);
+    }
+}
+
+@keyframes shimmer-sweep {
+    0% {
+        transform: translateX(-100%);
+    }
+    100% {
+        transform: translateX(200%);
+    }
+}
+
+.animate-float-gentle {
+    animation: float-gentle 3.5s ease-in-out infinite;
+}
+
+.animate-glow-gold {
+    animation: glow-gold 3s ease-in-out infinite;
+}
+
+.animate-glow-silver {
+    animation: glow-silver 3.5s ease-in-out infinite;
+}
+
+.animate-glow-bronze {
+    animation: glow-bronze 3.5s ease-in-out infinite;
+}
+
+.animate-shimmer {
+    animation: shimmer-sweep 3s ease-in-out infinite;
+}

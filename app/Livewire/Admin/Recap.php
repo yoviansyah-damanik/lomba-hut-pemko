@@ -15,7 +15,7 @@ use Livewire\Component;
 
 class Recap extends Component
 {
-    public const SCHOOL_TYPES = ['SD', 'SMP', 'SMA'];
+    public const SCHOOL_TYPES = ['SD', 'SMP', 'SMA', 'Umum'];
 
     #[Url]
     public string $school_type = '';
@@ -39,6 +39,21 @@ class Recap extends Component
     public string $beritaAcaraTanggal = '';
 
     public string $beritaAcaraKoordinator = '';
+
+    // Modal penyesuaian nilai (tambah / kurang)
+    public bool $showAdjustmentModal = false;
+
+    public ?string $adjustingRegistrationId = null;
+
+    public string $adjustingRegistrationName = '';
+
+    public string $adjustingRegistrationNpp = '';
+
+    public int $score_addition = 0;
+
+    public int $score_deduction = 0;
+
+    public string $adjustment_notes = '';
 
     public function mount(string $competitionId): void
     {
@@ -146,8 +161,13 @@ class Recap extends Component
     {
         $registrations = $competition->registrations()
             ->where('school_type', $schoolType)
-            ->withSum('evaluations as total_score', 'score')
-            ->get();
+            ->withSum('evaluations as raw_score', 'score')
+            ->get()
+            ->each(function (Registration $reg) {
+                $reg->raw_score = (int) ($reg->raw_score ?? 0);
+                $reg->final_score = $reg->calculateFinalScore($reg->raw_score);
+                $reg->total_score = $reg->final_score;
+            });
 
         $registrations = Registration::sortForRanking($registrations)->take(6)->values();
 
@@ -155,7 +175,7 @@ class Recap extends Component
             'no' => $index + 1,
             'npp' => $registration->npp,
             'rank_label' => self::beritaAcaraRankLabel($index + 1),
-            'total_score' => $registration->total_score ?? 0,
+            'total_score' => $registration->final_score ?? 0,
         ]);
     }
 
@@ -307,6 +327,47 @@ class Recap extends Component
         $this->detailRegistrationId = null;
     }
 
+    public function openAdjustment(string $registrationId): void
+    {
+        $registration = Registration::findOrFail($registrationId);
+        $this->adjustingRegistrationId = $registration->id;
+        $this->adjustingRegistrationName = $registration->displayName();
+        $this->adjustingRegistrationNpp = $registration->npp;
+        $this->score_addition = (int) ($registration->score_addition ?? 0);
+        $this->score_deduction = (int) ($registration->score_deduction ?? 0);
+        $this->adjustment_notes = (string) ($registration->adjustment_notes ?? '');
+        $this->showAdjustmentModal = true;
+    }
+
+    public function closeAdjustment(): void
+    {
+        $this->showAdjustmentModal = false;
+        $this->reset(['adjustingRegistrationId', 'adjustingRegistrationName', 'adjustingRegistrationNpp', 'score_addition', 'score_deduction', 'adjustment_notes']);
+    }
+
+    public function saveAdjustment(): void
+    {
+        $this->validate([
+            'score_addition' => ['required', 'integer', 'min:0'],
+            'score_deduction' => ['required', 'integer', 'min:0'],
+            'adjustment_notes' => ['nullable', 'string', 'max:1000'],
+        ], [], [
+            'score_addition' => __('penambahan nilai'),
+            'score_deduction' => __('pengurangan nilai'),
+            'adjustment_notes' => __('keterangan penyesuaian'),
+        ]);
+
+        if ($this->adjustingRegistrationId) {
+            Registration::where('id', $this->adjustingRegistrationId)->update([
+                'score_addition' => $this->score_addition,
+                'score_deduction' => $this->score_deduction,
+                'adjustment_notes' => $this->adjustment_notes ?: null,
+            ]);
+        }
+
+        $this->closeAdjustment();
+    }
+
     /**
      * Rincian juri per kriteria untuk satu peserta: siapa saja juri yang
      * ditugaskan, nilai yang sudah diberikan, dan catatannya (jika ada).
@@ -318,7 +379,7 @@ class Recap extends Component
         }
 
         $registration = $competition->registrations()
-            ->with(['participant', 'evaluations'])
+            ->with(['participant', 'evaluations.items.criterionItem'])
             ->find($this->detailRegistrationId);
 
         if (! $registration) {
@@ -343,6 +404,7 @@ class Recap extends Component
                             'score' => $evaluation->score ?? null,
                             'notes' => $evaluation->notes ?? null,
                             'submitted' => (bool) $evaluation,
+                            'items' => $evaluation?->items ?? collect(),
                         ];
                     });
 
@@ -372,9 +434,14 @@ class Recap extends Component
         return $this->competition()->registrations()
             ->with('participant')
             ->where('school_type', $schoolType)
-            ->withSum('evaluations as total_score', 'score')
+            ->withSum('evaluations as raw_score', 'score')
             ->get()
-            ->filter(fn (Registration $registration) => (int) ($registration->total_score ?? 0) === $totalScore)
+            ->each(function (Registration $reg) {
+                $reg->raw_score = (int) ($reg->raw_score ?? 0);
+                $reg->final_score = $reg->calculateFinalScore($reg->raw_score);
+                $reg->total_score = $reg->final_score;
+            })
+            ->filter(fn (Registration $registration) => (int) ($registration->final_score ?? 0) === $totalScore)
             ->sortBy(fn (Registration $registration) => $registration->tie_break_order ?? PHP_INT_MAX)
             ->values();
     }
@@ -398,7 +465,7 @@ class Recap extends Component
 
     private function competition(): ?Competition
     {
-        return Competition::with('criteria.judges')->find($this->competitionId);
+        return Competition::with(['criteria.judges', 'criteria.items'])->find($this->competitionId);
     }
 
     private function logoDataUri(): ?string
@@ -415,15 +482,20 @@ class Recap extends Component
     private function rows(Competition $competition): Collection
     {
         $registrations = $competition->registrations()
-            ->with(['participant', 'evaluations.criterion', 'evaluations.judge'])
+            ->with(['participant', 'evaluations.criterion', 'evaluations.judge', 'evaluations.items.criterionItem'])
             ->when($this->school_type, fn ($query) => $query->where('school_type', $this->school_type))
-            ->withSum('evaluations as total_score', 'score')
-            ->get();
+            ->withSum('evaluations as raw_score', 'score')
+            ->get()
+            ->each(function (Registration $reg) {
+                $reg->raw_score = (int) ($reg->raw_score ?? 0);
+                $reg->final_score = $reg->calculateFinalScore($reg->raw_score);
+                $reg->total_score = $reg->final_score;
+            });
 
         $registrations = Registration::sortForRanking($registrations);
 
         $clusterSizes = $registrations
-            ->groupBy(fn (Registration $registration) => $registration->school_type.'|'.((int) ($registration->total_score ?? 0)))
+            ->groupBy(fn (Registration $registration) => $registration->school_type.'|'.((int) ($registration->final_score ?? 0)))
             ->map->count();
 
         return $registrations->map(function (Registration $registration) use ($competition, $clusterSizes) {
@@ -444,24 +516,61 @@ class Recap extends Component
                     ])
                     ->values();
 
+                $subItems = collect();
+                if ($criterion->hasItems() && $evaluations->isNotEmpty()) {
+                    $subItems = $criterion->items->map(function ($item) use ($evaluations) {
+                        $scoreSum = $evaluations->flatMap->items
+                            ->where('criterion_item_id', $item->id)
+                            ->sum('score');
+
+                        return [
+                            'id' => $item->id,
+                            'name' => $item->name,
+                            'score' => $scoreSum,
+                        ];
+                    });
+                }
+
                 return [$criterion->id => [
                     'applicable' => $applicable,
                     'score' => $evaluations->sum('score'),
                     'submitted' => $evaluations->count(),
                     'expected' => $expected,
                     'notes' => $notes,
+                    'has_items' => $criterion->hasItems(),
+                    'sub_items' => $subItems,
                 ]];
             });
+
+            $applicableCriteria = $criteriaScores->filter(fn ($score) => $score['applicable']);
+            $totalSubmitted = $applicableCriteria->sum('submitted');
+            $totalExpected = $applicableCriteria->sum('expected');
+
+            $isComplete = $applicableCriteria->isNotEmpty()
+                && $totalExpected > 0
+                && $applicableCriteria->every(fn ($score) => $score['expected'] > 0 && $score['submitted'] >= $score['expected']);
+
+            $status = match (true) {
+                $isComplete => 'complete',
+                $totalSubmitted > 0 => 'partial',
+                default => 'unassessed',
+            };
 
             return (object) [
                 'registration' => $registration,
                 'npp' => $registration->npp,
                 'criteria_scores' => $criteriaScores,
-                'total_score' => $registration->total_score ?? 0,
-                'is_complete' => $criteriaScores->filter(fn ($score) => $score['applicable'])->every(
-                    fn ($score) => $score['expected'] > 0 && $score['submitted'] >= $score['expected']
-                ),
-                'is_tied' => $clusterSizes->get($registration->school_type.'|'.((int) ($registration->total_score ?? 0)), 0) > 1,
+                'raw_score' => $registration->raw_score ?? 0,
+                'score_addition' => $registration->score_addition ?? 0,
+                'score_deduction' => $registration->score_deduction ?? 0,
+                'adjustment_notes' => $registration->adjustment_notes,
+                'final_score' => $registration->final_score ?? 0,
+                'total_score' => $registration->final_score ?? 0,
+                'is_complete' => $isComplete,
+                'status' => $status,
+                'submitted_count' => $totalSubmitted,
+                'expected_count' => $totalExpected,
+                'is_tied' => $clusterSizes->get($registration->school_type.'|'.((int) ($registration->final_score ?? 0)), 0) > 1,
             ];
         });
     }

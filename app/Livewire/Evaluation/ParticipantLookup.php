@@ -19,7 +19,7 @@ class ParticipantLookup extends Component
     public string $npp = '';
 
     #[Session]
-    #[Validate('required|in:SD,SMP,SMA', as: 'jenis sekolah')]
+    #[Validate('required|in:SD,SMP,SMA,Umum', as: 'jenis sekolah')]
     public string $school_type = 'SD';
 
     public ?Registration $registration = null;
@@ -37,13 +37,20 @@ class ParticipantLookup extends Component
         }
     }
 
+    /** @var \Illuminate\Support\Collection<int, Competition>|null */
+    private ?\Illuminate\Support\Collection $competitionsCache = null;
+
     /** @return \Illuminate\Support\Collection<int, Competition> */
     public function judgeCompetitions()
     {
+        if ($this->competitionsCache !== null) {
+            return $this->competitionsCache;
+        }
+
         /** @var \App\Models\User $judge */
         $judge = Auth::user();
 
-        return $judge->criteria()
+        return $this->competitionsCache = $judge->criteria()
             ->with('competition')
             ->get()
             ->pluck('competition')
@@ -57,7 +64,8 @@ class ParticipantLookup extends Component
     {
         $this->validate();
 
-        $this->registration = Registration::where('competition_id', $this->competitionId)
+        $this->registration = Registration::with(['participant', 'competition'])
+            ->where('competition_id', $this->competitionId)
             ->where('npp', $this->npp)
             ->where('school_type', $this->school_type)
             ->first();

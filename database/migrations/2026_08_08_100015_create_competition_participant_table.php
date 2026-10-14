@@ -15,7 +15,7 @@ return new class extends Migration
             $table->uuid('id')->primary();
             $table->foreignUuid('competition_id')->constrained()->cascadeOnDelete();
             $table->foreignUuid('participant_id')->nullable()->constrained()->nullOnDelete();
-            $table->enum('school_type', ['SD', 'SMP', 'SMA']);
+            $table->enum('school_type', ['SD', 'SMP', 'SMA', 'Umum']);
             $table->string('npp');
             $table->string('label')->nullable();
             $table->unsignedTinyInteger('tie_break_order')->nullable();

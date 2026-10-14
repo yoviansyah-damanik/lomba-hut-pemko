@@ -1,5 +1,6 @@
 {
     "$schema": "https://www.schemastore.org/package.json",
+    "name": "lomba-hut-pemko",
     "private": true,
     "type": "module",
     "scripts": {

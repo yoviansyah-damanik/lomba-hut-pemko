@@ -83,6 +83,7 @@
                                 <option value="SD">SD</option>
                                 <option value="SMP">SMP</option>
                                 <option value="SMA">SMA</option>
+                                <option value="Umum">Umum</option>
                             </select>
                         </div>
                     </div>
@@ -92,7 +93,10 @@
                             <x-secondary-button type="button"
                                 wire:click="resetSearch">{{ __('Reset') }}</x-secondary-button>
                         @endif
-                        <x-primary-button type="submit">{{ __('Cari Peserta') }}</x-primary-button>
+                        <x-primary-button type="submit" wire:loading.attr="disabled">
+                            <span wire:loading.remove wire:target="search">{{ __('Cari Peserta') }}</span>
+                            <span wire:loading wire:target="search">{{ __('Mencari...') }}</span>
+                        </x-primary-button>
                     </div>
                 </form>
             </div>

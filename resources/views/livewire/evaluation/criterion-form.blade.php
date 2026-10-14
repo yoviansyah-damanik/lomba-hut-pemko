@@ -1,5 +1,76 @@
 <div class="p-4 space-y-6 bg-white shadow-sm dark:bg-gray-800 ring-1 ring-gray-100 dark:ring-gray-700 rounded-2xl sm:p-6"
-    @if ($criteria->isNotEmpty()) x-data @endif>
+    @if ($criteria->isNotEmpty())
+        x-data="{
+            storageKey: 'eval_draft_{{ $competitionId }}_{{ $registration->id }}',
+            draftRestored: false,
+            init() {
+                // 1. Auto-focus ke input nilai pertama
+                this.$nextTick(() => {
+                    const firstInput = this.$el.querySelector('input[type=\'number\']');
+                    if (firstInput) {
+                        firstInput.focus();
+                        firstInput.select();
+                    }
+                });
+
+                // 2. Auto-save restore dari LocalStorage
+                try {
+                    const saved = localStorage.getItem(this.storageKey);
+                    if (saved) {
+                        const data = JSON.parse(saved);
+                        let restored = false;
+                        if (data.scores) {
+                            for (const [cid, val] of Object.entries(data.scores)) {
+                                const input = document.getElementById('score-' + cid);
+                                if (input && val !== null && val !== undefined && val !== '') {
+                                    if (!input.value) {
+                                        input.value = val;
+                                        input.dispatchEvent(new Event('input', { bubbles: true }));
+                                        restored = true;
+                                    }
+                                }
+                            }
+                        }
+                        if (data.notes) {
+                            for (const [cid, val] of Object.entries(data.notes)) {
+                                const textarea = document.getElementById('notes-' + cid);
+                                if (textarea && val && !textarea.value) {
+                                    textarea.value = val;
+                                    textarea.dispatchEvent(new Event('input', { bubbles: true }));
+                                    restored = true;
+                                }
+                            }
+                        }
+                        if (restored) {
+                            this.draftRestored = true;
+                        }
+                    }
+                } catch (e) {}
+            },
+            saveDraft() {
+                try {
+                    const draft = { scores: {}, notes: {}, time: Date.now() };
+                    this.$el.querySelectorAll('input[type=\'number\'][id^=\'score-\']').forEach(input => {
+                        const cid = input.id.replace('score-', '');
+                        if (input.value !== '') draft.scores[cid] = input.value;
+                    });
+                    this.$el.querySelectorAll('textarea[id^=\'notes-\']').forEach(textarea => {
+                        const cid = textarea.id.replace('notes-', '');
+                        if (textarea.value.trim() !== '') draft.notes[cid] = textarea.value.trim();
+                    });
+                    localStorage.setItem(this.storageKey, JSON.stringify(draft));
+                } catch (e) {}
+            },
+            clearDraft() {
+                try {
+                    localStorage.removeItem(this.storageKey);
+                    this.draftRestored = false;
+                } catch (e) {}
+            }
+        }"
+        @input.debounce.500ms="saveDraft()"
+        @evaluation-saved.window="clearDraft()"
+    @endif>
     {{-- <div>
         <h3 class="text-lg font-medium text-gray-900 dark:text-gray-100">{{ $registration->displayName() }}</h3>
         <p class="text-sm text-gray-500 dark:text-gray-400">{{ $registration->npp }} &middot;
@@ -18,6 +89,18 @@
             </p>
         </div>
     @else
+        <div x-show="draftRestored" x-transition class="flex items-center justify-between p-3 text-xs rounded-xl bg-sky-50 dark:bg-sky-900/30 text-sky-800 dark:text-sky-300">
+            <div class="flex items-center gap-2">
+                <svg class="w-4 h-4 text-sky-500 shrink-0" fill="none" viewBox="0 0 24 24" stroke="currentColor" stroke-width="2">
+                    <path stroke-linecap="round" stroke-linejoin="round" d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span>{{ __('Draft nilai belum tersimpan otomatis dipulihkan dari penyimpanan lokal perangkat ini.') }}</span>
+            </div>
+            <button type="button" @click="clearDraft(); window.location.reload();" class="underline text-sky-600 dark:text-sky-400 hover:text-sky-800">
+                {{ __('Buang draft') }}
+            </button>
+        </div>
+
         <form wire:submit="review" class="space-y-4" autocomplete="off">
             @foreach ($criteria as $criterion)
                 <div class="p-4 space-y-3 ring-1 ring-gray-200 dark:ring-gray-700 rounded-xl">
@@ -28,28 +111,111 @@
                         @endif
                     </div>
 
-                    <div>
-                        <x-input-label :for="'score-' . $criterion->id" :value="__('Nilai (0-31)')" />
-                        <div class="flex items-center gap-3 mt-1">
-                            <button type="button" wire:click="decrementScore('{{ $criterion->id }}')"
-                                class="text-xl font-bold text-gray-600 border border-gray-300 rounded-lg shrink-0 h-11 w-11 dark:border-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 active:bg-gray-100 dark:active:bg-gray-600">
-                                &minus;
-                            </button>
-                            <input wire:model="scores.{{ $criterion->id }}" id="score-{{ $criterion->id }}"
-                                type="number" min="0" max="31" autocomplete="off"
-                                class="w-full text-xl font-bold text-center border-gray-300 rounded-lg shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 focus:border-red-500 focus:ring-red-500 scroll-mt-36">
-                            <button type="button" wire:click="incrementScore('{{ $criterion->id }}')"
-                                class="text-xl font-bold text-gray-600 border border-gray-300 rounded-lg shrink-0 h-11 w-11 dark:border-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 active:bg-gray-100 dark:active:bg-gray-600">
-                                +
-                            </button>
+                    @if ($criterion->items->isNotEmpty())
+                        {{-- Mode Rubrik Sub-Item --}}
+                        <div class="space-y-3 p-3.5 bg-gray-50/80 dark:bg-gray-900/40 rounded-xl border border-gray-200 dark:border-gray-700">
+                            <div class="flex items-center justify-between">
+                                <span class="text-xs font-bold uppercase tracking-wider text-gray-600 dark:text-gray-300">
+                                    {{ __('Rincian Sub-Item Penilaian') }}
+                                </span>
+                                <span class="inline-flex items-center gap-1.5 px-3 py-1 rounded-full text-xs font-bold bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-300">
+                                    <span>{{ __('Akumulasi:') }}</span>
+                                    <span class="text-sm font-black">{{ $scores[$criterion->id] ?? 0 }}</span>
+                                    <span class="text-[10px] text-gray-500 font-normal">/ {{ $criterion->max_score }}</span>
+                                </span>
+                            </div>
+
+                            <div class="space-y-2.5">
+                                @foreach ($criterion->items as $item)
+                                    <div class="p-3 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700 shadow-sm"
+                                        x-data="{
+                                            min: {{ $item->min_score }},
+                                            max: {{ $item->max_score }},
+                                            step(delta) {
+                                                const input = $refs.itemInput;
+                                                let val = parseInt(input.value);
+                                                if (isNaN(val)) {
+                                                    val = delta > 0 ? this.min : this.max;
+                                                } else {
+                                                    val += delta;
+                                                }
+                                                input.value = Math.min(this.max, Math.max(this.min, val));
+                                                input.dispatchEvent(new Event('input', { bubbles: true }));
+                                            }
+                                        }">
+                                        <div class="flex items-center justify-between gap-2 mb-1.5">
+                                            <p class="text-xs sm:text-sm font-semibold text-gray-800 dark:text-gray-200 truncate">
+                                                {{ $loop->iteration }}. {{ $item->name }}
+                                            </p>
+                                            <span class="text-[11px] font-medium text-gray-400 shrink-0">
+                                                ({{ $item->min_score }} &ndash; {{ $item->max_score }})
+                                            </span>
+                                        </div>
+
+                                        <div class="flex items-center gap-2">
+                                            <button type="button" @click="step(-1)"
+                                                class="text-lg font-bold text-gray-600 border border-gray-300 rounded-lg shrink-0 h-10 w-10 dark:border-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 active:bg-gray-100 select-none">
+                                                &minus;
+                                            </button>
+                                            <input wire:model.live.debounce.300ms="itemScores.{{ $criterion->id }}.{{ $item->id }}"
+                                                x-ref="itemInput"
+                                                id="score-item-{{ $criterion->id }}-{{ $item->id }}"
+                                                type="number" min="{{ $item->min_score }}" max="{{ $item->max_score }}"
+                                                class="w-full text-lg font-bold text-center border-gray-300 rounded-lg shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 focus:border-red-500 focus:ring-red-500">
+                                            <button type="button" @click="step(1)"
+                                                class="text-lg font-bold text-gray-600 border border-gray-300 rounded-lg shrink-0 h-10 w-10 dark:border-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 active:bg-gray-100 select-none">
+                                                +
+                                            </button>
+                                        </div>
+                                        <x-input-error :messages="$errors->get('itemScores.' . $criterion->id . '.' . $item->id)" class="mt-1" />
+                                    </div>
+                                @endforeach
+                            </div>
                         </div>
-                        <x-input-error :messages="$errors->get('scores.' . $criterion->id)" class="mt-2" />
-                    </div>
+                    @else
+                        {{-- Mode Normal (Nilai Langsung) --}}
+                        <div>
+                            <x-input-label :for="'score-' . $criterion->id" :value="__('Nilai (:min - :max)', [
+                                'min' => $criterion->min_score,
+                                'max' => $criterion->max_score,
+                            ])" />
+                            <div class="flex items-center gap-3 mt-1" x-data="{
+                                min: {{ $criterion->min_score }},
+                                max: {{ $criterion->max_score }},
+                                step(delta) {
+                                    const input = $refs.scoreInput;
+                                    let val = parseInt(input.value);
+                                    if (isNaN(val)) {
+                                        val = delta > 0 ? this.min : this.max;
+                                    } else {
+                                        val += delta;
+                                    }
+                                    input.value = Math.min(this.max, Math.max(this.min, val));
+                                    input.dispatchEvent(new Event('input', { bubbles: true }));
+                                }
+                            }">
+                                <button type="button" @click="step(-1)"
+                                    class="text-xl font-bold text-gray-600 border border-gray-300 rounded-lg shrink-0 h-11 w-11 dark:border-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 active:bg-gray-100 dark:active:bg-gray-600 select-none">
+                                    &minus;
+                                </button>
+                                <input wire:model="scores.{{ $criterion->id }}" x-ref="scoreInput"
+                                    id="score-{{ $criterion->id }}" type="number" min="{{ $criterion->min_score }}"
+                                    max="{{ $criterion->max_score }}" @if ($loop->first) autofocus @endif autocomplete="off"
+                                    class="w-full text-xl font-bold text-center border-gray-300 rounded-lg shadow-sm dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 focus:border-red-500 focus:ring-red-500 scroll-mt-36">
+                                <button type="button" @click="step(1)"
+                                    class="text-xl font-bold text-gray-600 border border-gray-300 rounded-lg shrink-0 h-11 w-11 dark:border-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 active:bg-gray-100 dark:active:bg-gray-600 select-none">
+                                    +
+                                </button>
+                            </div>
+                            <x-input-error :messages="$errors->get('scores.' . $criterion->id)" class="mt-2" />
+                        </div>
+                    @endif
 
                     <div>
                         <div class="flex items-center justify-between">
                             <x-input-label :for="'notes-' . $criterion->id" :value="__('Catatan')" />
-                            <button type="button" wire:click="$set('notes.{{ $criterion->id }}', '')"
+                            <button type="button"
+                                @click="$refs.notesInput.value = ''; $refs.notesInput.dispatchEvent(new Event('input', { bubbles: true }))"
                                 class="text-xs font-medium text-gray-400 hover:text-red-600 dark:hover:text-red-400">
                                 {{ __('Kosongkan') }}
                             </button>
@@ -156,7 +322,19 @@
             <div
                 class="fixed inset-x-0 z-40 px-4 py-3 border-t border-gray-200 bottom-16 sm:bottom-0 bg-white/95 dark:bg-gray-800/95 backdrop-blur dark:border-gray-700 sm:px-6 lg:px-8">
                 <div class="flex justify-end mx-auto max-w-7xl">
-                    <x-primary-button type="submit" class="w-full sm:w-auto">{{ __('Simpan') }}</x-primary-button>
+                    <x-primary-button type="submit" class="w-full sm:w-auto" wire:loading.attr="disabled">
+                        <span wire:loading.remove wire:target="review">{{ __('Simpan') }}</span>
+                        <span wire:loading wire:target="review" class="inline-flex items-center gap-1.5">
+                            <svg class="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
+                                    stroke-width="4"></circle>
+                                <path class="opacity-75" fill="currentColor"
+                                    d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                                </path>
+                            </svg>
+                            {{ __('Memeriksa...') }}
+                        </span>
+                    </x-primary-button>
                 </div>
             </div>
         </form>
@@ -173,8 +351,18 @@
                         class="flex items-start justify-between gap-4 pt-3 border-t border-gray-100 dark:border-gray-700 first:border-t-0 first:pt-0">
                         <div class="min-w-0">
                             <p class="text-sm font-medium text-gray-900 dark:text-gray-100">{{ $criterion->name }}</p>
+                            @if ($criterion->items->isNotEmpty())
+                                <div class="mt-1 space-y-0.5 pl-2 border-l-2 border-red-200 dark:border-red-900/60">
+                                    @foreach ($criterion->items as $item)
+                                        <p class="text-xs text-gray-500 dark:text-gray-400 flex items-center justify-between gap-4">
+                                            <span>{{ $item->name }}:</span>
+                                            <span class="font-semibold text-gray-700 dark:text-gray-300">{{ $itemScores[$criterion->id][$item->id] ?? '-' }}</span>
+                                        </p>
+                                    @endforeach
+                                </div>
+                            @endif
                             @if (filled($notes[$criterion->id] ?? null))
-                                <p class="text-xs italic text-gray-500 dark:text-gray-400 mt-0.5">
+                                <p class="text-xs italic text-gray-500 dark:text-gray-400 mt-1">
                                     {{ $notes[$criterion->id] }}</p>
                             @endif
                         </div>
@@ -185,8 +373,21 @@
             </div>
 
             <div class="flex justify-end gap-2 mt-6">
-                <x-secondary-button type="button" wire:click="cancelReview">{{ __('Kembali') }}</x-secondary-button>
-                <x-primary-button type="button" wire:click="save">{{ __('Konfirmasi & Simpan') }}</x-primary-button>
+                <x-secondary-button type="button" wire:click="cancelReview"
+                    wire:loading.attr="disabled">{{ __('Kembali') }}</x-secondary-button>
+                <x-primary-button type="button" wire:click="save" wire:loading.attr="disabled">
+                    <span wire:loading.remove wire:target="save">{{ __('Konfirmasi & Simpan') }}</span>
+                    <span wire:loading.flex wire:target="save" class="inline-flex items-center gap-1.5">
+                        <svg class="animate-spin h-4 w-4 text-white" fill="none" viewBox="0 0 24 24">
+                            <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor"
+                                stroke-width="4"></circle>
+                            <path class="opacity-75" fill="currentColor"
+                                d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z">
+                            </path>
+                        </svg>
+                        {{ __('Menyimpan...') }}
+                    </span>
+                </x-primary-button>
             </div>
         </x-simple-modal>
     @endif

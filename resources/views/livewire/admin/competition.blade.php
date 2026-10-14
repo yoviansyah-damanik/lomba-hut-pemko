@@ -165,7 +165,17 @@
                                     <div class="min-w-0">
                                         <p class="font-medium text-gray-900 dark:text-gray-100 truncate">
                                             {{ $criterion->name }}</p>
-                                        <div class="flex flex-wrap gap-1 mt-1">
+                                        <div class="flex flex-wrap items-center gap-1.5 mt-1">
+                                            <span
+                                                class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-red-50 text-red-700 dark:bg-red-900/30 dark:text-red-300 ring-1 ring-red-200 dark:ring-red-800">
+                                                {{ __('Nilai: :min - :max', ['min' => $criterion->min_score, 'max' => $criterion->max_score]) }}
+                                            </span>
+                                            @if ($criterion->items->isNotEmpty())
+                                                <span
+                                                    class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-semibold bg-violet-50 text-violet-700 dark:bg-violet-900/30 dark:text-violet-300 ring-1 ring-violet-200 dark:ring-violet-800">
+                                                    {{ __(':count Sub-Item Rubrik', ['count' => $criterion->items->count()]) }}
+                                                </span>
+                                            @endif
                                             @foreach ($criterion->school_types as $type)
                                                 <span
                                                     class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-600 dark:bg-gray-700 dark:text-gray-300">
@@ -337,10 +347,96 @@
                 <x-input-error :messages="$errors->get('criterion_description')" class="mt-2" />
             </div>
 
+            {{-- Toggle Sub-Item Penilaian (Rubrik) --}}
+            <div class="p-3 bg-gray-50 dark:bg-gray-800/60 rounded-xl border border-gray-200 dark:border-gray-700">
+                <label class="flex items-center gap-2.5 cursor-pointer">
+                    <input type="checkbox" wire:model.live="has_sub_items"
+                        class="rounded dark:bg-gray-900 border-gray-300 dark:border-gray-700 text-red-600 shadow-sm focus:ring-red-500">
+                    <span class="text-sm font-semibold text-gray-800 dark:text-gray-200">{{ __('Gunakan Sub-Item Penilaian (Rubrik)') }}</span>
+                </label>
+                <p class="text-xs text-gray-400 dark:text-gray-500 mt-1">
+                    {{ __('Jika diaktifkan, juri akan menginput nilai per item dan nilai kriteria akan otomatis terhitung dari akumulasi item tersebut.') }}
+                </p>
+            </div>
+
+            @if ($has_sub_items)
+                {{-- Form Sub-Items --}}
+                <div class="space-y-3 p-3.5 bg-red-50/40 dark:bg-red-950/20 rounded-xl border border-red-100 dark:border-red-900/40">
+                    <div class="flex items-center justify-between">
+                        <span class="text-xs font-bold uppercase tracking-wider text-red-700 dark:text-red-300">
+                            {{ __('Daftar Sub-Item Rubrik') }}
+                        </span>
+                        <button type="button" wire:click="addSubItem"
+                            class="inline-flex items-center gap-1 text-xs font-semibold text-red-600 dark:text-red-400 hover:text-red-700">
+                            + {{ __('Tambah Item') }}
+                        </button>
+                    </div>
+
+                    @error('subItems')
+                        <p class="text-xs text-red-600 dark:text-red-400">{{ $message }}</p>
+                    @enderror
+
+                    <div class="space-y-2">
+                        @foreach ($subItems as $idx => $item)
+                            <div class="flex flex-col sm:flex-row items-start sm:items-center gap-2 p-2.5 bg-white dark:bg-gray-800 rounded-lg border border-gray-200 dark:border-gray-700">
+                                <span class="text-xs font-bold text-gray-400 w-5 shrink-0">{{ $idx + 1 }}.</span>
+                                <div class="flex-1 w-full sm:w-auto">
+                                    <input type="text" wire:model="subItems.{{ $idx }}.name"
+                                        placeholder="{{ __('Nama item (contoh: Artikulasi & Intonasi)') }}"
+                                        class="w-full text-xs rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 focus:border-red-500 focus:ring-red-500">
+                                    @error('subItems.' . $idx . '.name')
+                                        <p class="text-[10px] text-red-600 mt-0.5">{{ $message }}</p>
+                                    @enderror
+                                </div>
+                                <div class="flex items-center gap-2 w-full sm:w-auto shrink-0">
+                                    <div class="w-20">
+                                        <input type="number" wire:model.live="subItems.{{ $idx }}.min_score" min="0" placeholder="Min"
+                                            class="w-full text-xs text-center rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 focus:border-red-500 focus:ring-red-500">
+                                    </div>
+                                    <span class="text-xs text-gray-400">-</span>
+                                    <div class="w-20">
+                                        <input type="number" wire:model.live="subItems.{{ $idx }}.max_score" min="0" placeholder="Max"
+                                            class="w-full text-xs text-center rounded-md border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 focus:border-red-500 focus:ring-red-500">
+                                    </div>
+                                    <button type="button" wire:click="removeSubItem({{ $idx }})"
+                                        class="p-1 text-gray-400 hover:text-red-600 transition" title="{{ __('Hapus item') }}">
+                                        <svg class="w-4 h-4" fill="none" viewBox="0 0 24 24" stroke="currentColor">
+                                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16" />
+                                        </svg>
+                                    </button>
+                                </div>
+                            </div>
+                        @endforeach
+                    </div>
+
+                    <div class="flex items-center justify-between text-xs text-gray-500 dark:text-gray-400 pt-1">
+                        <span>{{ __('Akumulasi Nilai Kriteria:') }}</span>
+                        <span class="font-bold text-red-600 dark:text-red-400">
+                            {{ $criterion_min_score }} &ndash; {{ $criterion_max_score }}
+                        </span>
+                    </div>
+                </div>
+            @else
+                <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div>
+                        <x-input-label for="criterion_min_score" :value="__('Nilai Minimal')" />
+                        <x-text-input wire:model="criterion_min_score" id="criterion_min_score" class="block mt-1 w-full"
+                            type="number" min="0" required />
+                        <x-input-error :messages="$errors->get('criterion_min_score')" class="mt-2" />
+                    </div>
+                    <div>
+                        <x-input-label for="criterion_max_score" :value="__('Nilai Maksimal')" />
+                        <x-text-input wire:model="criterion_max_score" id="criterion_max_score" class="block mt-1 w-full"
+                            type="number" min="0" required />
+                        <x-input-error :messages="$errors->get('criterion_max_score')" class="mt-2" />
+                    </div>
+                </div>
+            @endif
+
             <div>
                 <x-input-label :value="__('Jenjang Sekolah')" />
-                <div class="mt-1 flex gap-4">
-                    @foreach (['SD', 'SMP', 'SMA'] as $type)
+                <div class="mt-1 flex flex-wrap gap-4">
+                    @foreach (\App\Livewire\Admin\Competition::SCHOOL_TYPES as $type)
                         <label class="flex items-center gap-2">
                             <input type="checkbox" wire:model.live="criterionSchoolTypes" value="{{ $type }}"
                                 class="rounded dark:bg-gray-900 border-gray-300 dark:border-gray-700 text-red-600 shadow-sm focus:ring-red-500">
@@ -354,7 +450,7 @@
                 </p>
             </div>
 
-            @foreach (['SD', 'SMP', 'SMA'] as $type)
+            @foreach (\App\Livewire\Admin\Competition::SCHOOL_TYPES as $type)
                 @if (in_array($type, $criterionSchoolTypes, true))
                     <div>
                         <x-input-label :value="__('Juri Penilai — :type', ['type' => $type])" />

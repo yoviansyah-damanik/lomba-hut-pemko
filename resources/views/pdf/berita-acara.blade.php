@@ -122,6 +122,7 @@
             'SD' => 'SD/MI Sederajat',
             'SMP' => 'SMP/MTs Sederajat',
             'SMA' => 'SMA/MA/SMK Sederajat',
+            'Umum' => 'Kategori Umum',
         ];
     @endphp
 
@@ -141,7 +142,7 @@
                     <th style="width:40px;">{{ __('No') }}</th>
                     <th style="width:80px;">{{ __('NPP') }}</th>
                     <th>{{ __('Peringkat') }}</th>
-                    <th style="width:120px;">{{ __('Jumlah Nilai') }}</th>
+                    <th style="width:120px;">{{ __('Nilai Akhir') }}</th>
                 </tr>
             </thead>
             <tbody>

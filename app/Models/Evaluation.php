@@ -6,6 +6,7 @@ use Illuminate\Database\Eloquent\Attributes\Fillable;
 use Illuminate\Database\Eloquent\Concerns\HasUuids;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Database\Eloquent\Relations\HasMany;
 
 #[Fillable(['user_id', 'registration_id', 'criterion_id', 'score', 'notes'])]
 class Evaluation extends Model
@@ -35,5 +36,11 @@ class Evaluation extends Model
     public function criterion(): BelongsTo
     {
         return $this->belongsTo(Criterion::class);
+    }
+
+    /** @return HasMany<EvaluationItem, $this> */
+    public function items(): HasMany
+    {
+        return $this->hasMany(EvaluationItem::class);
     }
 }

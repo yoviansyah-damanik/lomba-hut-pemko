@@ -111,6 +111,11 @@
             color: #0f766e;
         }
 
+        .badge-umum {
+            background-color: #fef3c7;
+            color: #b45309;
+        }
+
         .incomplete {
             color: #b45309;
         }
@@ -204,6 +209,7 @@
                 'SD' => 'badge-sd',
                 'SMP' => 'badge-smp',
                 'SMA' => 'badge-sma',
+                'Umum' => 'badge-umum',
             ];
         @endphp
         <table class="recap">
@@ -215,7 +221,7 @@
                     @foreach ($competition->criteria as $criterion)
                         <th style="text-align:center" class="number">{{ $criterion->name }}</th>
                     @endforeach
-                    <th style="text-align:center" class="number">{{ __('Total') }}</th>
+                    <th style="text-align:center" class="number">{{ __('Akhir') }}</th>
                 </tr>
             </thead>
             <tbody>
@@ -251,7 +257,12 @@
                                 </td>
                             @endif
                         @endforeach
-                        <td class="total">{{ $row->total_score }}</td>
+                        <td class="total">
+                            {{ $row->final_score }}
+                            @if (filled($row->adjustment_notes))
+                                <div class="cell-notes">{{ $row->adjustment_notes }}</div>
+                            @endif
+                        </td>
                     </tr>
                 @endforeach
             </tbody>

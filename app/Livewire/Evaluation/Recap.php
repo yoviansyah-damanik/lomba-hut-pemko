@@ -49,6 +49,7 @@ class Recap extends Component
 
         if ($competition) {
             $judgeCriteria = $judge->criteria()
+                ->with('items')
                 ->where('competition_id', $competition->id)
                 ->get();
 
@@ -65,7 +66,10 @@ class Recap extends Component
                 : $availableSchoolTypes->all();
 
             $registrations = $competition->registrations()
-                ->with(['participant', 'evaluations' => fn ($query) => $query->where('user_id', $judge->id)])
+                ->with([
+                    'participant',
+                    'evaluations' => fn ($query) => $query->where('user_id', $judge->id)->with('items.criterionItem'),
+                ])
                 ->whereIn('school_type', $schoolTypes)
                 ->orderBy('school_type')
                 ->orderBy('npp')
@@ -76,23 +80,52 @@ class Recap extends Component
 
                 $criteriaScores = $criteria->mapWithKeys(function ($criterion) use ($registration, $evaluationsByCriterion, $allowedTypesByCriterion) {
                     $applicable = in_array($registration->school_type, $allowedTypesByCriterion->get($criterion->id, []), true);
+                    /** @var \App\Models\Evaluation|null $evaluation */
                     $evaluation = $evaluationsByCriterion->get($criterion->id);
+
+                    $subItems = collect();
+                    if ($criterion->hasItems()) {
+                        $evaluationItemsMap = $evaluation?->items?->keyBy('criterion_item_id') ?? collect();
+                        $subItems = $criterion->items->map(function ($item) use ($evaluationItemsMap) {
+                            $evalItem = $evaluationItemsMap->get($item->id);
+
+                            return [
+                                'id' => $item->id,
+                                'name' => $item->name,
+                                'score' => $evalItem?->score,
+                            ];
+                        });
+                    }
 
                     return [$criterion->id => [
                         'applicable' => $applicable,
                         'filled' => $applicable && $evaluation !== null,
                         'score' => $evaluation->score ?? null,
                         'notes' => $evaluation->notes ?? null,
+                        'has_items' => $criterion->hasItems(),
+                        'sub_items' => $subItems,
                     ]];
                 });
 
                 $applicableScores = $criteriaScores->filter(fn ($score) => $score['applicable']);
+                $totalFilled = $applicableScores->where('filled', true)->count();
+                $totalCount = $applicableScores->count();
+                $isComplete = $applicableScores->isNotEmpty() && $totalFilled === $totalCount;
+
+                $status = match (true) {
+                    $isComplete => 'complete',
+                    $totalFilled > 0 => 'partial',
+                    default => 'unassessed',
+                };
 
                 return (object) [
                     'registration' => $registration,
                     'criteria_scores' => $criteriaScores,
                     'total_score' => $applicableScores->sum('score'),
-                    'is_complete' => $applicableScores->isNotEmpty() && $applicableScores->every(fn ($score) => $score['filled']),
+                    'is_complete' => $isComplete,
+                    'status' => $status,
+                    'filled_count' => $totalFilled,
+                    'total_count' => $totalCount,
                 ];
             });
         }

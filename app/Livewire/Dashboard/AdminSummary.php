@@ -38,23 +38,45 @@ class AdminSummary extends Component
         return $trend;
     }
 
+    public function placeholder(): string
+    {
+        return view('livewire.dashboard.skeleton')->render();
+    }
+
     public function render()
     {
         $registrationCountByCompetition = Registration::selectRaw('competition_id, count(*) as total')
             ->groupBy('competition_id')
             ->pluck('total', 'competition_id');
 
-        $competitionProgress = Competition::withCount('criteria')
-            ->get()
-            ->map(function (Competition $competition) use ($registrationCountByCompetition) {
-                $registrationCount = $registrationCountByCompetition[$competition->id] ?? 0;
-                $expected = Criterion::where('competition_id', $competition->id)->withCount('judges')->get()->sum('judges_count') * $registrationCount;
-                $actual = Evaluation::whereHas('criterion', fn ($query) => $query->where('competition_id', $competition->id))->count();
+        // Pre-fetch evaluasi per kompetisi dalam 1 kueri agregasi
+        $evaluationsCountByCompetition = Evaluation::join('criteria', 'evaluations.criterion_id', '=', 'criteria.id')
+            ->selectRaw('criteria.competition_id, count(*) as total')
+            ->groupBy('criteria.competition_id')
+            ->pluck('total', 'criteria.competition_id');
 
-                return ['label' => $competition->name, 'value' => $actual, 'max' => $expected];
-            })
-            ->filter(fn (array $row) => $row['max'] > 0)
-            ->values();
+        $competitions = Competition::with('criteria.judges')->get();
+
+        $competitionProgress = $competitions->map(function (Competition $competition) use ($registrationCountByCompetition, $evaluationsCountByCompetition) {
+            $registrationCount = $registrationCountByCompetition[$competition->id] ?? 0;
+            $expected = $competition->criteria->sum(fn (Criterion $criterion) => $criterion->judges->count()) * $registrationCount;
+            $actual = $evaluationsCountByCompetition[$competition->id] ?? 0;
+
+            return [
+                'id' => $competition->id,
+                'label' => $competition->name,
+                'value' => $actual,
+                'max' => $expected,
+                'isActive' => $competition->isActive(),
+                'competition' => $competition,
+            ];
+        })
+        ->filter(fn (array $row) => $row['max'] > 0)
+        ->values();
+
+        $activeCompetitions = $competitions->filter(fn (Competition $c) => $c->isActive())->values();
+        $unassignedCriteriaCount = Criterion::doesntHave('judges')->count();
+        $latestCompetition = $activeCompetitions->first() ?? $competitions->sortByDesc('start_time')->first();
 
         $judgeProgress = User::where('role', 'judge')
             ->with('criteria')
@@ -82,6 +104,9 @@ class AdminSummary extends Component
             'trend' => $this->evaluationTrend(),
             'competitionProgress' => $competitionProgress,
             'judgeProgress' => $judgeProgress,
+            'activeCompetitions' => $activeCompetitions,
+            'unassignedCriteriaCount' => $unassignedCriteriaCount,
+            'latestCompetition' => $latestCompetition,
         ]);
     }
 }

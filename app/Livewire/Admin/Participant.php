@@ -12,7 +12,7 @@ class Participant extends Component
 {
     use WithPagination;
 
-    public const SCHOOL_TYPES = ['SD', 'SMP', 'SMA'];
+    public const SCHOOL_TYPES = ['SD', 'SMP', 'SMA', 'Umum'];
 
     #[Url]
     public string $search = '';
@@ -27,7 +27,7 @@ class Participant extends Component
     #[Validate('required|string|max:255')]
     public string $school_name = '';
 
-    #[Validate('required|in:SD,SMP,SMA')]
+    #[Validate('required|in:SD,SMP,SMA,Umum')]
     public string $school_type = 'SD';
 
     // Modal riwayat lomba
