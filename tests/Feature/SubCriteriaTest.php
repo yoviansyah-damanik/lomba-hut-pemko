@@ -209,6 +209,47 @@ class SubCriteriaTest extends TestCase
         $this->assertNotNull($kreativitas);
         $this->assertFalse($kreativitas->hasItems());
         $this->assertCount(0, $kreativitas->items);
+
+        // Verifikasi Lomba Drumband / Marching Band
+        $drumband = Competition::where('name', 'Lomba Drumband / Marching Band')->first();
+        $this->assertNotNull($drumband);
+        $this->assertCount(3, $drumband->criteria);
+
+        $music = $drumband->criteria()->where('name', 'Music Performance')->first();
+        $this->assertNotNull($music);
+        $this->assertSame(100, $music->max_score);
+        $this->assertCount(3, $music->items);
+        $this->assertSame('Kualitas Suara Keseluruhan', $music->items[0]->name);
+        $this->assertSame(40, $music->items[0]->max_score);
+        $this->assertSame('Artikulasi dan Teknik & Dinamika', $music->items[1]->name);
+        $this->assertSame(40, $music->items[1]->max_score);
+        $this->assertSame('Balance and Blend', $music->items[2]->name);
+        $this->assertSame(20, $music->items[2]->max_score);
+
+        $visual = $drumband->criteria()->where('name', 'Visual Performance')->first();
+        $this->assertNotNull($visual);
+        $this->assertSame(100, $visual->max_score);
+        $this->assertCount(3, $visual->items);
+        $this->assertSame('Keseragaman dan Sinkronisasi Gerak', $visual->items[0]->name);
+        $this->assertSame(40, $visual->items[0]->max_score);
+        $this->assertSame('Kerapian Formasi & Interval', $visual->items[1]->name);
+        $this->assertSame(40, $visual->items[1]->max_score);
+        $this->assertSame('Control of Movement', $visual->items[2]->name);
+        $this->assertSame(20, $visual->items[2]->max_score);
+
+        $ge = $drumband->criteria()->where('name', 'Overall Impression (GE)')->first();
+        $this->assertNotNull($ge);
+        $this->assertSame(100, $ge->max_score);
+        $this->assertCount(3, $ge->items);
+        $this->assertSame('Effect dan Entertainment', $ge->items[0]->name);
+        $this->assertSame(40, $ge->items[0]->max_score);
+        $this->assertSame('Concept dan Coordination & Kreatifitas', $ge->items[1]->name);
+        $this->assertSame(40, $ge->items[1]->max_score);
+        $this->assertSame('Kesatuan dan Variasi', $ge->items[2]->name);
+        $this->assertSame(20, $ge->items[2]->max_score);
+
+        $this->assertSame(300, $music->max_score + $visual->max_score + $ge->max_score);
+        $this->assertGreaterThan(0, $drumband->registrations()->count());
     }
 
     public function test_evaluation_recap_displays_sub_items_breakdown_and_total_accumulation(): void
