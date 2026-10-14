@@ -44,6 +44,7 @@ class DatabaseSeeder extends Seeder
         }
 
         $this->seedDrumbandCompetition($judges);
+        $this->seedKarnavalCompetition($judges);
     }
 
     /**
@@ -263,6 +264,89 @@ class DatabaseSeeder extends Seeder
                     'participant_id' => $participant->id,
                     'school_type' => $schoolType,
                     'npp' => "MB-{$schoolType}-".str_pad((string) $i, 2, '0', STR_PAD_LEFT),
+                ]);
+            }
+        }
+    }
+
+    /**
+     * @param \Illuminate\Support\Collection<int, User> $judges
+     */
+    protected function seedKarnavalCompetition($judges): void
+    {
+        if (Competition::where('name', 'Lomba Karnaval')->exists()) {
+            return;
+        }
+
+        $competition = Competition::create([
+            'name' => 'Lomba Karnaval',
+            'start_time' => now()->subHour(),
+            'end_time' => now()->addHours(6),
+        ]);
+
+        $criteriaDefinitions = [
+            [
+                'name' => 'Kreativitas',
+                'description' => "Indikator Penilaian:\na. Kemampuan mengekspresikan ide/gagasan\nb. Kemampuan mengolah gaya dan penampilan\nc. Kemampuan penggunaan property pendukung\nd. Kemampuan Menyesuaikan Tema yang dipilih",
+                'min_score' => 0,
+                'max_score' => 100,
+            ],
+            [
+                'name' => 'Disiplin dan Semangat',
+                'description' => "Indikator Penilaian:\na. Kerjasama Tim\nb. Kerapian Barisan\nc. Semangat Kebersamaan\nd. Patuh pada peraturan Lomba dan Kepatuhan pada adat istiadat dan budaya Indonesia",
+                'min_score' => 0,
+                'max_score' => 100,
+            ],
+            [
+                'name' => 'Kerapian dan Keselarasan',
+                'description' => "Indikator Penilaian:\na. Keindahan/kerapian busana peserta\nb. Postur peserta yang sedap dipandang\nc. Pengaturan Busana sesuai peran\nd. Keindahan properti dan peralatan yang digunakan",
+                'min_score' => 0,
+                'max_score' => 100,
+            ],
+        ];
+
+        foreach ($criteriaDefinitions as $def) {
+            $criterion = Criterion::create([
+                'competition_id' => $competition->id,
+                'name' => $def['name'],
+                'description' => $def['description'],
+                'school_types' => ['SD', 'SMP', 'SMA', 'Umum'],
+                'min_score' => $def['min_score'],
+                'max_score' => $def['max_score'],
+            ]);
+
+            $rows = [];
+            foreach ($criterion->school_types as $type) {
+                foreach ($judges as $judge) {
+                    $rows[] = ['user_id' => $judge->id, 'school_type' => $type];
+                }
+            }
+            $criterion->judges()->newPivotStatement()->insert(array_map(
+                fn (array $row) => $row + ['criterion_id' => $criterion->id, 'created_at' => now(), 'updated_at' => now()],
+                $rows
+            ));
+        }
+
+        // Pendaftaran peserta Karnaval per jenjang
+        $prefixes = [
+            'SD' => ['Kontingen Karnaval Cilik', 5],
+            'SMP' => ['Kontingen Karnaval Muda', 5],
+            'SMA' => ['Kontingen Karnaval Madya', 5],
+            'Umum' => ['Kontingen Karnaval Budaya', 5],
+        ];
+
+        foreach ($prefixes as $schoolType => [$unitName, $count]) {
+            for ($i = 1; $i <= $count; $i++) {
+                $participant = Participant::create([
+                    'school_name' => "{$unitName} {$schoolType} {$i}",
+                    'school_type' => $schoolType,
+                ]);
+
+                Registration::create([
+                    'competition_id' => $competition->id,
+                    'participant_id' => $participant->id,
+                    'school_type' => $schoolType,
+                    'npp' => "KV-{$schoolType}-".str_pad((string) $i, 2, '0', STR_PAD_LEFT),
                 ]);
             }
         }

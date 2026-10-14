@@ -250,6 +250,30 @@ class SubCriteriaTest extends TestCase
 
         $this->assertSame(300, $music->max_score + $visual->max_score + $ge->max_score);
         $this->assertGreaterThan(0, $drumband->registrations()->count());
+
+        // Verifikasi Lomba Karnaval (tanpa sub-item, indikator di keterangan/deskripsi)
+        $karnaval = Competition::where('name', 'Lomba Karnaval')->first();
+        $this->assertNotNull($karnaval);
+        $this->assertCount(3, $karnaval->criteria);
+
+        $kreativitasKarnaval = $karnaval->criteria()->where('name', 'Kreativitas')->first();
+        $this->assertNotNull($kreativitasKarnaval);
+        $this->assertFalse($kreativitasKarnaval->hasItems());
+        $this->assertSame(100, $kreativitasKarnaval->max_score);
+        $this->assertStringContainsString('Kemampuan mengekspresikan ide/gagasan', $kreativitasKarnaval->description);
+
+        $disiplin = $karnaval->criteria()->where('name', 'Disiplin dan Semangat')->first();
+        $this->assertNotNull($disiplin);
+        $this->assertFalse($disiplin->hasItems());
+        $this->assertSame(100, $disiplin->max_score);
+        $this->assertStringContainsString('Kerjasama Tim', $disiplin->description);
+
+        $kerapianKarnaval = $karnaval->criteria()->where('name', 'Kerapian dan Keselarasan')->first();
+        $this->assertNotNull($kerapianKarnaval);
+        $this->assertFalse($kerapianKarnaval->hasItems());
+        $this->assertSame(100, $kerapianKarnaval->max_score);
+        $this->assertStringContainsString('Keindahan/kerapian busana peserta', $kerapianKarnaval->description);
+        $this->assertGreaterThan(0, $karnaval->registrations()->count());
     }
 
     public function test_evaluation_recap_displays_sub_items_breakdown_and_total_accumulation(): void
