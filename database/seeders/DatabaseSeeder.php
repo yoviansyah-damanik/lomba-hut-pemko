@@ -167,7 +167,22 @@ class DatabaseSeeder extends Seeder
      */
     protected function seedDrumbandCompetition($judges): void
     {
-        if (Competition::where('name', 'Lomba Drumband / Marching Band')->exists()) {
+        $existing = Competition::where('name', 'Lomba Drumband / Marching Band')->first();
+        if ($existing) {
+            // Jika sudah ada tapi categories belum diset ke Marching Band & Drum Band, update
+            if ($existing->categories_list !== ['Marching Band', 'Drum Band']) {
+                $existing->update(['categories' => ['Marching Band', 'Drum Band']]);
+                foreach ($existing->criteria as $crit) {
+                    $crit->update(['school_types' => ['Marching Band', 'Drum Band']]);
+                    $crit->judges()->detach();
+                    foreach (['Marching Band', 'Drum Band'] as $type) {
+                        foreach ($judges as $judge) {
+                            $crit->judges()->attach($judge->id, ['school_type' => $type]);
+                        }
+                    }
+                }
+            }
+
             return;
         }
 

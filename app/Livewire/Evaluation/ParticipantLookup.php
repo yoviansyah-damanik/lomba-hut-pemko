@@ -39,7 +39,8 @@ class ParticipantLookup extends Component
 
     public function updatedCompetitionId(): void
     {
-        $this->syncSchoolType();
+        $categories = $this->currentCategories();
+        $this->school_type = $categories[0] ?? 'SD';
     }
 
     public function currentCategories(): array

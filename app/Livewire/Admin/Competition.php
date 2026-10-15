@@ -256,7 +256,33 @@ class Competition extends Component
         ];
 
         if ($this->editing) {
+            $oldCategories = $this->editing->categories_list;
             $this->editing->update($payload);
+
+            // Jika daftar kategori berubah, bersihkan penugasan juri yang sudah tidak relevan
+            if ($oldCategories !== $categories) {
+                $criterionIds = $this->editing->criteria()->pluck('id');
+
+                if ($criterionIds->isNotEmpty()) {
+                    // Hapus penugasan juri pada kategori yang sudah tidak ada
+                    DB::table('criterion_user')
+                        ->whereIn('criterion_id', $criterionIds)
+                        ->whereNotIn('school_type', $categories)
+                        ->delete();
+
+                    // Update school_types pada tiap kriteria agar hanya memuat kategori yang masih valid
+                    foreach ($this->editing->criteria as $criterion) {
+                        $updatedTypes = array_values(array_intersect($criterion->school_types ?? [], $categories));
+                        // Jika seluruh kategori lama hilang, kosongkan atau set ke kategori baru
+                        $criterion->update(['school_types' => $updatedTypes]);
+
+                        // Jika kriteria tidak lagi memiliki juri untuk kategori yang tersisa dan kosong, bersihkan semua penugasan
+                        if (empty($updatedTypes)) {
+                            DB::table('criterion_user')->where('criterion_id', $criterion->id)->delete();
+                        }
+                    }
+                }
+            }
         } else {
             CompetitionModel::create($payload);
         }

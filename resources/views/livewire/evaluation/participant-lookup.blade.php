@@ -44,7 +44,7 @@
                                     class="relative flex items-center gap-3 rounded-xl border-2 border-gray-300 dark:border-gray-700 p-3 cursor-pointer transition
                                         hover:border-red-300 dark:hover:border-red-700 hover:bg-gray-50 dark:hover:bg-gray-700/40
                                         has-[:checked]:border-red-600 has-[:checked]:bg-red-50 has-[:checked]:shadow-sm dark:has-[:checked]:bg-red-900/30">
-                                    <input type="radio" wire:model="competitionId" value="{{ $item->id }}"
+                                    <input type="radio" wire:model.live="competitionId" value="{{ $item->id }}"
                                         class="peer sr-only">
                                     <span
                                         class="flex h-5 w-5 shrink-0 items-center justify-center rounded-full border-2 border-gray-300 dark:border-gray-600 transition peer-checked:border-red-600">
@@ -78,7 +78,7 @@
 
                         <div>
                             <x-input-label for="school_type" :value="__('Jenjang / Kategori')" />
-                            <select wire:model="school_type" id="school_type" autocomplete="off"
+                            <select wire:model="school_type" id="school_type" wire:key="select-category-{{ $competitionId }}" autocomplete="off"
                                 class="border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 focus:border-red-500 focus:ring-red-500 rounded-md shadow-sm mt-1 block w-full">
                                 @foreach ($this->currentCategories() as $cat)
                                     <option value="{{ $cat }}">{{ $cat }}</option>
