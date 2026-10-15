@@ -213,52 +213,32 @@
 
                     <div x-data="{
                         listening: false,
+                        manualStop: true,
                         supported: 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window,
                         rec: null,
                         baseText: '',
                         finalText: '',
-                        // Cursor kami sendiri, terpisah dari e.resultIndex — di Android Chrome,
-                        // e.resultIndex/e.results tidak bisa dipercaya (kadang mengirim ulang
-                        // seluruh transkrip dari awal sebagai 'hasil baru'). Dengan menandai
-                        // index yang sudah dikunci di sini, index itu tidak pernah diproses lagi
-                        // walau muncul lagi di event berikutnya.
+                        // Cursor index untuk menghindari duplikasi transkrip di Android / Chrome
                         committedUpTo: 0,
+                        init() {
+                            if (typeof this.$cleanup === 'function') {
+                                this.$cleanup(() => this.stopListening());
+                            }
+                        },
                         applyText(text) {
                             this.$refs.notesInput.value = text;
-                            // set .value tidak memicu event 'input' bawaan browser,
-                            // jadi wire:model tidak akan tersinkron tanpa dispatch manual ini.
+                            // Sinkronkan ke Livewire wire:model
                             this.$refs.notesInput.dispatchEvent(new Event('input'));
                         },
-                        stopListening() {
-                            this.listening = false;
-                            if (this.rec) {
-                                // detach handler dulu supaya event onresult/onend yang telat
-                                // (setelah abort) tidak lagi mengubah state.
-                                this.rec.onresult = null;
-                                this.rec.onend = null;
-                                this.rec.onerror = null;
-                                // abort() langsung memutus koneksi, beda dengan stop() yang
-                                // masih menunggu hasil akhir diproses (itu sebabnya mic
-                                // terasa tidak langsung mati saat diklik).
-                                this.rec.abort();
-                                this.rec = null;
-                            }
-                        },
-                        toggle() {
-                            if (!this.supported) return;
-                            if (this.listening) {
-                                this.stopListening();
-                                return;
-                            }
+                        createRecognition() {
                             const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-                            this.rec = new SR();
-                            this.rec.lang = 'id-ID';
-                            this.rec.continuous = true;
-                            this.rec.interimResults = true;
-                            this.baseText = this.$refs.notesInput.value.trim();
-                            this.finalText = '';
-                            this.committedUpTo = 0;
-                            this.rec.onresult = (e) => {
+                            if (!SR) return null;
+                            const rec = new SR();
+                            rec.lang = 'id-ID';
+                            rec.continuous = true;
+                            rec.interimResults = true;
+
+                            rec.onresult = (e) => {
                                 let interim = '';
                                 for (let i = this.committedUpTo; i < e.results.length; i++) {
                                     const transcript = e.results[i][0].transcript.trim();
@@ -270,22 +250,76 @@
                                         interim += transcript;
                                     }
                                 }
-                                // Kadang, dalam event yang sama, entri interim yang tersisa
-                                // hanya menggemakan teks yang baru saja dikunci final di atas
-                                // (belum sempat dibersihkan mesin pengenal) — kalau dibiarkan,
-                                // hasilnya jadi 'kalimat kalimat' dobel. Interim yang begini
-                                // diabaikan.
+                                // Hindari teks interim yang menggemakan teks final
                                 if (interim && (interim === this.finalText || this.finalText.endsWith(interim))) {
                                     interim = '';
                                 }
                                 this.applyText([this.baseText, [this.finalText, interim].filter(Boolean).join(' ')].filter(Boolean).join(' '));
                             };
-                            this.rec.onend = () => this.stopListening();
-                            this.rec.onerror = () => this.stopListening();
-                            this.rec.start();
-                            this.listening = true;
+
+                            rec.onerror = (e) => {
+                                // 'no-speech' dan 'aborted' adalah event wajar saat jeda bicara, abaikan agar tetap merekam
+                                if (e.error === 'not-allowed') {
+                                    this.stopListening();
+                                }
+                            };
+
+                            rec.onend = () => {
+                                // Cegah voice mati otomatis — restart perekaman sampai user menekan tombol matikan
+                                if (this.listening && !this.manualStop) {
+                                    this.baseText = this.$refs.notesInput.value.trim();
+                                    this.finalText = '';
+                                    this.committedUpTo = 0;
+                                    setTimeout(() => {
+                                        if (this.listening && !this.manualStop) {
+                                            try {
+                                                this.rec = this.createRecognition();
+                                                this.rec?.start();
+                                            } catch (err) {}
+                                        }
+                                    }, 100);
+                                }
+                            };
+
+                            return rec;
                         },
-                    }">
+                        stopListening() {
+                            this.manualStop = true;
+                            this.listening = false;
+                            if (this.rec) {
+                                this.rec.onresult = null;
+                                this.rec.onend = null;
+                                this.rec.onerror = null;
+                                try {
+                                    this.rec.abort();
+                                } catch (e) {}
+                                this.rec = null;
+                            }
+                        },
+                        toggle() {
+                            if (!this.supported) return;
+                            if (this.listening) {
+                                this.stopListening();
+                                return;
+                            }
+
+                            // Matikan rekaman di kriteria lain jika ada yang aktif
+                            window.dispatchEvent(new CustomEvent('voice-started', { detail: { id: '{{ $criterion->id }}' } }));
+
+                            this.manualStop = false;
+                            this.listening = true;
+                            this.baseText = this.$refs.notesInput.value.trim();
+                            this.finalText = '';
+                            this.committedUpTo = 0;
+                            try {
+                                this.rec = this.createRecognition();
+                                this.rec?.start();
+                            } catch (e) {
+                                this.stopListening();
+                            }
+                        },
+                    }"
+                    @voice-started.window="if (listening && $event.detail.id !== '{{ $criterion->id }}') stopListening()">
                         <div class="flex items-center justify-between mb-1.5">
                             <div class="flex items-center gap-2">
                                 <x-input-label :for="'notes-' . $criterion->id" :value="__('Catatan')" class="!mb-0" />
