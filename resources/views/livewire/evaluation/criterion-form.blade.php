@@ -216,20 +216,67 @@
                         manualStop: true,
                         supported: 'webkitSpeechRecognition' in window || 'SpeechRecognition' in window,
                         rec: null,
-                        baseText: '',
-                        finalText: '',
-                        // Cursor index untuk menghindari duplikasi transkrip di Android / Chrome
-                        committedUpTo: 0,
+                        committedText: '',
+                        interimText: '',
+                        restartTimer: null,
+
                         init() {
                             if (typeof this.$cleanup === 'function') {
                                 this.$cleanup(() => this.stopListening());
                             }
                         },
+
+                        cleanWord(word) {
+                            return (word || '').toLowerCase().replace(/[.,/#!$%^&*;:{}=\-_`~()?'\x22]/g, '').trim();
+                        },
+
+                        // Menggabungkan dua teks dengan deteksi overlap cerdas agar tidak terjadi duplikasi kata
+                        mergeText(prev, next) {
+                            prev = (prev || '').trim();
+                            next = (next || '').trim();
+                            if (!prev) return next;
+                            if (!next) return prev;
+
+                            const normPrev = prev.toLowerCase().replace(/\s+/g, ' ');
+                            const normNext = next.toLowerCase().replace(/\s+/g, ' ');
+
+                            // 1. Jika teks baru identik atau sudah ada di akhir teks lama
+                            if (normPrev === normNext || normPrev.endsWith(normNext)) {
+                                return prev;
+                            }
+
+                            // 2. Jika teks baru merupakan versi kumulatif yang diawali teks lama (umum di Android/Chrome)
+                            if (normNext.startsWith(normPrev)) {
+                                return next;
+                            }
+
+                            // 3. Deteksi overlap berbasis kata pada sambungan akhir prev dan awal next
+                            const prevWords = prev.split(/\s+/);
+                            const nextWords = next.split(/\s+/);
+                            const maxOverlap = Math.min(prevWords.length, nextWords.length, 10);
+
+                            for (let len = maxOverlap; len > 0; len--) {
+                                const prevSlice = prevWords.slice(prevWords.length - len);
+                                const nextSlice = nextWords.slice(0, len);
+
+                                const prevMatch = prevSlice.map(w => this.cleanWord(w)).join(' ');
+                                const nextMatch = nextSlice.map(w => this.cleanWord(w)).join(' ');
+
+                                if (prevMatch === nextMatch && prevMatch.length > 0) {
+                                    const remainingNext = nextWords.slice(len).join(' ');
+                                    return remainingNext ? `${prev} ${remainingNext}` : prev;
+                                }
+                            }
+
+                            // 4. Tidak ada overlap kata, gabungkan dengan spasi
+                            return `${prev} ${next}`;
+                        },
+
                         applyText(text) {
                             this.$refs.notesInput.value = text;
-                            // Sinkronkan ke Livewire wire:model
-                            this.$refs.notesInput.dispatchEvent(new Event('input'));
+                            this.$refs.notesInput.dispatchEvent(new Event('input', { bubbles: true }));
                         },
+
                         createRecognition() {
                             const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
                             if (!SR) return null;
@@ -237,40 +284,50 @@
                             rec.lang = 'id-ID';
                             rec.continuous = true;
                             rec.interimResults = true;
+                            rec.maxAlternatives = 1;
 
                             rec.onresult = (e) => {
-                                let interim = '';
-                                for (let i = this.committedUpTo; i < e.results.length; i++) {
-                                    const transcript = e.results[i][0].transcript.trim();
-                                    if (e.results[i].isFinal) {
-                                        this.finalText = (this.finalText && transcript.startsWith(this.finalText)) ?
-                                            transcript : [this.finalText, transcript].filter(Boolean).join(' ');
-                                        this.committedUpTo = i + 1;
+                                let sessionFinal = '';
+                                let sessionInterim = '';
+
+                                for (let i = e.resultIndex; i < e.results.length; i++) {
+                                    const item = e.results[i];
+                                    const transcript = item[0]?.transcript?.trim() || '';
+                                    if (!transcript) continue;
+
+                                    if (item.isFinal) {
+                                        sessionFinal = this.mergeText(sessionFinal, transcript);
                                     } else {
-                                        interim += transcript;
+                                        sessionInterim = this.mergeText(sessionInterim, transcript);
                                     }
                                 }
-                                // Hindari teks interim yang menggemakan teks final
-                                if (interim && (interim === this.finalText || this.finalText.endsWith(interim))) {
-                                    interim = '';
+
+                                if (sessionFinal) {
+                                    this.committedText = this.mergeText(this.committedText, sessionFinal);
                                 }
-                                this.applyText([this.baseText, [this.finalText, interim].filter(Boolean).join(' ')].filter(Boolean).join(' '));
+
+                                this.interimText = sessionInterim;
+
+                                const currentDisplay = this.interimText
+                                    ? this.mergeText(this.committedText, this.interimText)
+                                    : this.committedText;
+
+                                this.applyText(currentDisplay);
                             };
 
                             rec.onerror = (e) => {
-                                // 'no-speech' dan 'aborted' adalah event wajar saat jeda bicara, abaikan agar tetap merekam
                                 if (e.error === 'not-allowed') {
                                     this.stopListening();
                                 }
                             };
 
                             rec.onend = () => {
-                                // Cegah voice mati otomatis — restart perekaman sampai user menekan tombol matikan
+                                // Jangan simpan interimText ke committedText saat jeda/reconnect
+                                this.interimText = '';
+
                                 if (this.listening && !this.manualStop) {
-                                    this.baseText = this.$refs.notesInput.value.trim();
-                                    this.finalText = '';
-                                    this.committedUpTo = 0;
-                                    setTimeout(() => {
+                                    clearTimeout(this.restartTimer);
+                                    this.restartTimer = setTimeout(() => {
                                         if (this.listening && !this.manualStop) {
                                             try {
                                                 this.rec = this.createRecognition();
@@ -283,9 +340,14 @@
 
                             return rec;
                         },
+
                         stopListening() {
                             this.manualStop = true;
                             this.listening = false;
+                            clearTimeout(this.restartTimer);
+                            this.restartTimer = null;
+                            this.interimText = '';
+
                             if (this.rec) {
                                 this.rec.onresult = null;
                                 this.rec.onend = null;
@@ -295,7 +357,13 @@
                                 } catch (e) {}
                                 this.rec = null;
                             }
+
+                            // Pastikan input sinkron dengan teks akhir yang terverifikasi
+                            if (this.committedText) {
+                                this.applyText(this.committedText);
+                            }
                         },
+
                         toggle() {
                             if (!this.supported) return;
                             if (this.listening) {
@@ -308,15 +376,21 @@
 
                             this.manualStop = false;
                             this.listening = true;
-                            this.baseText = this.$refs.notesInput.value.trim();
-                            this.finalText = '';
-                            this.committedUpTo = 0;
+                            this.committedText = this.$refs.notesInput.value.trim();
+                            this.interimText = '';
+
                             try {
                                 this.rec = this.createRecognition();
                                 this.rec?.start();
                             } catch (e) {
                                 this.stopListening();
                             }
+                        },
+
+                        clearNotes() {
+                            this.committedText = '';
+                            this.interimText = '';
+                            this.applyText('');
                         },
                     }"
                     @voice-started.window="if (listening && $event.detail.id !== '{{ $criterion->id }}') stopListening()">
@@ -339,7 +413,7 @@
                                 </button>
                             </div>
                             <button type="button"
-                                @click="$refs.notesInput.value = ''; $refs.notesInput.dispatchEvent(new Event('input', { bubbles: true }))"
+                                @click="clearNotes()"
                                 class="text-xs font-medium text-gray-400 hover:text-red-600 dark:hover:text-red-400 transition">
                                 {{ __('Kosongkan') }}
                             </button>
