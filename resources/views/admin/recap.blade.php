@@ -34,7 +34,7 @@
     </x-slot>
 
     <div class="py-12 print:py-0">
-        <div class="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 print:px-0 print:max-w-none">
+        <div class="max-w-7xl 2xl:max-w-[1600px] mx-auto px-4 sm:px-6 lg:px-8 print:px-0 print:max-w-none">
             <livewire:admin.recap :competition-id="$competitionId" />
         </div>
     </div>

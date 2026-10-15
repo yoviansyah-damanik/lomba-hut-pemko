@@ -21,6 +21,9 @@ class Recap extends Component
     public string $school_type = '';
 
     #[Url]
+    public string $search = '';
+
+    #[Url]
     public bool $include_notes = false;
 
     public string $competitionId;
@@ -460,12 +463,23 @@ class Recap extends Component
             ? $this->clusterRegistrations(...$this->parseClusterKey())
             : null;
 
+        $categoryCounts = $competition
+            ? $competition->registrations()
+                ->selectRaw('school_type, count(*) as total')
+                ->groupBy('school_type')
+                ->pluck('total', 'school_type')
+            : collect();
+
+        $totalAllParticipants = $competition ? $competition->registrations()->count() : 0;
+
         return view('livewire.admin.recap', [
             'competition' => $competition,
             'rows' => $competition ? $this->rows($competition) : collect(),
             'tieCluster' => $tieCluster,
             'judgeDetail' => $competition ? $this->judgeDetail($competition) : null,
             'maskIdentity' => $competition && $competition->hide_identity,
+            'categoryCounts' => $categoryCounts,
+            'totalAllParticipants' => $totalAllParticipants,
         ]);
     }
 
@@ -490,6 +504,12 @@ class Recap extends Component
         $registrations = $competition->registrations()
             ->with(['participant', 'evaluations.criterion', 'evaluations.judge', 'evaluations.items.criterionItem'])
             ->when($this->school_type, fn ($query) => $query->where('school_type', $this->school_type))
+            ->when(filled($this->search), function ($query) {
+                $query->where(function ($q) {
+                    $q->where('npp', 'like', '%'.$this->search.'%')
+                        ->orWhereHas('participant', fn ($pq) => $pq->where('name', 'like', '%'.$this->search.'%'));
+                });
+            })
             ->withSum('evaluations as raw_score', 'score')
             ->get()
             ->each(function (Registration $reg) {

@@ -4,6 +4,8 @@
         'SMP' => 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300',
         'SMA' => 'bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300',
         'Umum' => 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+        'Marching Band' => 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300',
+        'Drum Band' => 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300',
     ];
 @endphp
 
@@ -101,7 +103,7 @@
                                         {{ $maskIdentity ? __('Peserta :npp', ['npp' => $row->registration->npp]) : $row->registration->displayName() }}</td>
                                     <td class="px-4 py-3">
                                         <span
-                                            class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium {{ $typeColors[$row->registration->school_type] }}">
+                                            class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium {{ $typeColors[$row->registration->school_type] ?? 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300' }}">
                                             {{ $row->registration->school_type }}
                                         </span>
                                     </td>

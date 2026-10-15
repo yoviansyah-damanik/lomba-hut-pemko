@@ -170,27 +170,37 @@
         <div class="bg-white dark:bg-gray-800 shadow-sm ring-1 ring-gray-100 dark:ring-gray-700 rounded-2xl p-4 sm:p-5">
             <h3 class="text-sm font-semibold text-gray-700 dark:text-gray-300 mb-4">{{ __('Distribusi Peserta per Jenis Sekolah') }}</h3>
             @php
-                $typeColors = ['SD' => 'bg-sky-500', 'SMP' => 'bg-violet-500', 'SMA' => 'bg-teal-500', 'Umum' => 'bg-amber-500'];
+                $typeColors = [
+                    'SD' => 'bg-sky-500',
+                    'SMP' => 'bg-violet-500',
+                    'SMA' => 'bg-teal-500',
+                    'Umum' => 'bg-amber-500',
+                    'Marching Band' => 'bg-rose-500',
+                    'Drum Band' => 'bg-indigo-500',
+                ];
+                $allDisplayTypes = array_unique(array_merge(['SD', 'SMP', 'SMA', 'Umum'], $participantsByType->keys()->all()));
                 $typeTotal = max(1, $participantsByType->sum());
             @endphp
             <div class="flex h-3 w-full rounded-full overflow-hidden gap-0.5 bg-gray-100 dark:bg-gray-700">
-                @foreach (['SD', 'SMP', 'SMA', 'Umum'] as $type)
+                @foreach ($allDisplayTypes as $type)
                     @php $count = $participantsByType[$type] ?? 0; @endphp
                     @if ($count > 0)
-                        <div class="{{ $typeColors[$type] }}" style="width: {{ ($count / $typeTotal) * 100 }}%"></div>
+                        <div class="{{ $typeColors[$type] ?? 'bg-gray-400' }}" style="width: {{ ($count / $typeTotal) * 100 }}%"></div>
                     @endif
                 @endforeach
             </div>
             <div class="mt-4 space-y-2">
-                @foreach (['SD', 'SMP', 'SMA', 'Umum'] as $type)
+                @foreach ($allDisplayTypes as $type)
                     @php $count = $participantsByType[$type] ?? 0; @endphp
-                    <div class="flex items-center justify-between text-sm">
-                        <span class="flex items-center gap-2 text-gray-700 dark:text-gray-300">
-                            <span class="h-2.5 w-2.5 rounded-full {{ $typeColors[$type] }} shrink-0"></span>
-                            {{ $type }}
-                        </span>
-                        <span class="text-gray-500 dark:text-gray-400 tabular-nums">{{ $count }} ({{ $typeTotal > 0 ? round(($count / $typeTotal) * 100) : 0 }}%)</span>
-                    </div>
+                    @if ($count > 0 || in_array($type, ['SD', 'SMP', 'SMA', 'Umum']))
+                        <div class="flex items-center justify-between text-sm">
+                            <span class="flex items-center gap-2 text-gray-700 dark:text-gray-300">
+                                <span class="h-2.5 w-2.5 rounded-full {{ $typeColors[$type] ?? 'bg-gray-400' }} shrink-0"></span>
+                                {{ $type }}
+                            </span>
+                            <span class="text-gray-500 dark:text-gray-400 tabular-nums">{{ $count }} ({{ $typeTotal > 0 ? round(($count / $typeTotal) * 100) : 0 }}%)</span>
+                        </div>
+                    @endif
                 @endforeach
             </div>
         </div>

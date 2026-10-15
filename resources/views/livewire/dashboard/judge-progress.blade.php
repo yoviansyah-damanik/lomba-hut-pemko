@@ -158,6 +158,8 @@
             'SMP' => 'bg-violet-100 text-violet-700 dark:bg-violet-900/40 dark:text-violet-300',
             'SMA' => 'bg-teal-100 text-teal-700 dark:bg-teal-900/40 dark:text-teal-300',
             'Umum' => 'bg-amber-100 text-amber-700 dark:bg-amber-900/40 dark:text-amber-300',
+            'Marching Band' => 'bg-rose-100 text-rose-700 dark:bg-rose-900/40 dark:text-rose-300',
+            'Drum Band' => 'bg-indigo-100 text-indigo-700 dark:bg-indigo-900/40 dark:text-indigo-300',
         ];
     @endphp
     <div class="bg-white dark:bg-gray-800 shadow-sm ring-1 ring-gray-100 dark:ring-gray-700 rounded-2xl p-4 sm:p-5">
@@ -170,7 +172,7 @@
                     <div>
                         <x-charts.meter :value="$criterion->evaluations_count" :max="$criterion->registrations_count">
                             <x-slot:label>
-                                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium {{ $typeColors[$criterion->assignment_school_type] ?? 'bg-gray-100 text-gray-700' }}">
+                                <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium {{ $typeColors[$criterion->assignment_school_type] ?? 'bg-gray-100 text-gray-700 dark:bg-gray-700 dark:text-gray-300' }}">
                                     {{ $criterion->assignment_school_type }}
                                 </span>
                                 {{ $criterion->name }}

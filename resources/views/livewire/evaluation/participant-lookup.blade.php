@@ -14,6 +14,11 @@
         @if ($searched && $registration)
             <div x-data="{
                 showBackConfirm: false,
+                pendingUrl: null,
+                pendingWireNavigate: false,
+                pendingAction: null,
+                isBypassing: false,
+
                 hasInputValues() {
                     const inputs = document.querySelectorAll('input[type=\'number\'][id^=\'score-\']');
                     for (const inp of inputs) {
@@ -25,23 +30,121 @@
                     }
                     return false;
                 },
+
                 requestBack() {
                     if (this.hasInputValues()) {
+                        this.pendingUrl = null;
+                        this.pendingAction = null;
                         this.showBackConfirm = true;
                     } else {
                         this.confirmLeave();
                     }
                 },
+
                 confirmLeave() {
                     this.showBackConfirm = false;
-                    $wire.resetSearch();
+                    document.body.classList.remove('overflow-y-hidden');
+
+                    if (this.pendingUrl) {
+                        const dest = this.pendingUrl;
+                        const useWire = this.pendingWireNavigate;
+                        this.pendingUrl = null;
+                        this.pendingWireNavigate = false;
+
+                        if (useWire && window.Livewire && typeof window.Livewire.navigate === 'function') {
+                            window.Livewire.navigate(dest);
+                        } else {
+                            window.location.href = dest;
+                        }
+                    } else if (this.pendingAction) {
+                        const action = this.pendingAction;
+                        this.pendingAction = null;
+                        this.isBypassing = true;
+                        try {
+                            action();
+                        } finally {
+                            setTimeout(() => { this.isBypassing = false; }, 150);
+                        }
+                    } else {
+                        $wire.resetSearch();
+                    }
                 },
+
                 stayOnPage() {
                     this.showBackConfirm = false;
+                    this.pendingUrl = null;
+                    this.pendingAction = null;
                     try {
                         history.pushState({ evaluating: true }, '');
                     } catch (e) {}
                 },
+
+                handleGlobalClick(e) {
+                    if (this.isBypassing) return;
+                    if (e.button !== 0) return;
+                    if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+                    if (!this.hasInputValues()) return;
+
+                    if (!document.body.contains(this.$el)) {
+                        this.destroy();
+                        return;
+                    }
+
+                    // Jangan cegat klik di dalam dialog modal konfirmasi
+                    const modalEl = this.$refs.confirmModal;
+                    if (modalEl && modalEl.contains(e.target)) return;
+
+                    // 1. Cek apakah yang diklik adalah Link navigasi (<a>)
+                    const link = e.target.closest('a');
+                    if (link && link.href) {
+                        if (link.target === '_blank') return;
+                        const href = link.getAttribute('href');
+                        if (!href || href === '#' || href.startsWith('#') || href.startsWith('javascript:')) {
+                            return;
+                        }
+
+                        e.preventDefault();
+                        e.stopImmediatePropagation();
+                        this.pendingUrl = link.href;
+                        this.pendingWireNavigate = link.hasAttribute('wire:navigate');
+                        this.pendingAction = null;
+                        this.showBackConfirm = true;
+                        return;
+                    }
+
+                    // 2. Cek apakah yang diklik adalah tombol logout di navbar
+                    const logoutBtn = e.target.closest('[wire\\:click*=\'logout\']');
+                    if (logoutBtn) {
+                        e.preventDefault();
+                        e.stopImmediatePropagation();
+                        this.pendingUrl = null;
+                        this.pendingAction = () => { logoutBtn.click(); };
+                        this.showBackConfirm = true;
+                        return;
+                    }
+                },
+
+                handlePopstate(event) {
+                    if (this.hasInputValues()) {
+                        this.pendingUrl = null;
+                        this.pendingAction = null;
+                        this.showBackConfirm = true;
+                        try {
+                            history.pushState({ evaluating: true }, '');
+                        } catch (err) {}
+                    } else {
+                        this.confirmLeave();
+                    }
+                },
+
+                handleBeforeUnload(e) {
+                    if (this.hasInputValues()) {
+                        e.preventDefault();
+                        e.returnValue = '';
+                        return '';
+                    }
+                },
+
                 init() {
                     try {
                         history.pushState({ evaluating: true }, '');
@@ -54,9 +157,27 @@
                             document.body.classList.remove('overflow-y-hidden');
                         }
                     });
+
+                    const clickListener = (e) => this.handleGlobalClick(e);
+                    const unloadListener = (e) => this.handleBeforeUnload(e);
+
+                    window.addEventListener('click', clickListener, true);
+                    window.addEventListener('beforeunload', unloadListener);
+
+                    this._cleanup = () => {
+                        window.removeEventListener('click', clickListener, true);
+                        window.removeEventListener('beforeunload', unloadListener);
+                    };
+                },
+
+                destroy() {
+                    document.body.classList.remove('overflow-y-hidden');
+                    if (this._cleanup) {
+                        this._cleanup();
+                    }
                 }
             }"
-            @popstate.window="if (hasInputValues()) { showBackConfirm = true; try { history.pushState({ evaluating: true }, ''); } catch(e){} } else { confirmLeave(); }"
+            @popstate.window="handlePopstate($event)"
             @keydown.escape.window="if (showBackConfirm) stayOnPage()">
                 {{-- Sticky Top Bar --}}
                 <div class="sticky top-16 z-30 -mx-4 sm:mx-0 px-4 sm:px-0 py-2 bg-gray-100/95 dark:bg-gray-900/95 backdrop-blur">
@@ -82,6 +203,7 @@
                 {{-- Modal Konfirmasi Meninggalkan Penilaian --}}
                 <div x-show="showBackConfirm"
                     x-cloak
+                    x-ref="confirmModal"
                     class="fixed inset-0 z-50 overflow-y-auto px-4 py-6 sm:px-0 flex min-h-full items-center justify-center"
                     style="display: none;"
                     role="dialog"
@@ -123,14 +245,14 @@
                                     {{ __('Nilai yang belum disimpan tetap aman tersimpan di draf lokal perangkat ini.') }}
                                 </p>
                                 <p class="text-xs text-gray-400 dark:text-gray-500 mt-2">
-                                    {{ __('Pilih "Lanjut Menilai" jika Anda tidak sengaja menekan tombol kembali.') }}
+                                    {{ __('Pilih "Lanjut Menilai" jika Anda tidak sengaja menekan tombol kembali atau berpindah menu.') }}
                                 </p>
                             </div>
                         </div>
 
                         <div class="mt-6 pt-4 border-t border-gray-100 dark:border-gray-700/60 flex flex-col-reverse sm:flex-row sm:justify-end gap-2.5">
                             <x-secondary-button type="button" @click="confirmLeave()" class="w-full sm:w-auto justify-center text-xs py-2.5">
-                                {{ __('Ya, Kembali ke Pencarian') }}
+                                <span x-text="pendingUrl ? '{{ __('Ya, Pindah Halaman') }}' : '{{ __('Ya, Kembali ke Pencarian') }}'"></span>
                             </x-secondary-button>
                             <x-primary-button type="button" @click="stayOnPage()" class="w-full sm:w-auto justify-center text-xs py-2.5 shadow-md">
                                 {{ __('Lanjut Menilai') }}
