@@ -32,18 +32,16 @@
                 },
 
                 requestBack() {
-                    if (this.hasInputValues()) {
-                        this.pendingUrl = null;
-                        this.pendingAction = null;
-                        this.showBackConfirm = true;
-                    } else {
-                        this.confirmLeave();
-                    }
+                    this.pendingUrl = null;
+                    this.pendingAction = null;
+                    this.pendingWireNavigate = false;
+                    this.showBackConfirm = true;
                 },
 
                 confirmLeave() {
                     this.showBackConfirm = false;
                     document.body.classList.remove('overflow-y-hidden');
+                    this.isBypassing = true;
 
                     if (this.pendingUrl) {
                         const dest = this.pendingUrl;
@@ -59,11 +57,10 @@
                     } else if (this.pendingAction) {
                         const action = this.pendingAction;
                         this.pendingAction = null;
-                        this.isBypassing = true;
                         try {
                             action();
                         } finally {
-                            setTimeout(() => { this.isBypassing = false; }, 150);
+                            setTimeout(() => { this.isBypassing = false; }, 300);
                         }
                     } else {
                         $wire.resetSearch();
@@ -74,27 +71,51 @@
                     this.showBackConfirm = false;
                     this.pendingUrl = null;
                     this.pendingAction = null;
+                    this.pendingWireNavigate = false;
                     try {
                         history.pushState({ evaluating: true }, '');
                     } catch (e) {}
+                },
+
+                handleGlobalMousedown(e) {
+                    if (this.isBypassing) return;
+                    if (e.button !== 0) return;
+                    if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
+                    if (!document.body.contains(this.$el)) return;
+
+                    // Jangan cegat klik di dalam dialog modal konfirmasi
+                    const modalEl = this.$refs.confirmModal;
+                    if (modalEl && modalEl.contains(e.target)) return;
+
+                    // Cegat mousedown pada link navigasi sebelum Livewire memprosesnya
+                    const link = e.target.closest('a');
+                    if (link && link.href) {
+                        if (link.target === '_blank') return;
+                        const href = link.getAttribute('href');
+                        if (!href || href === '#' || href.startsWith('#') || href.startsWith('javascript:')) {
+                            return;
+                        }
+
+                        e.preventDefault();
+                        e.stopImmediatePropagation();
+                        this.pendingUrl = link.href;
+                        this.pendingWireNavigate = link.hasAttribute('wire:navigate');
+                        this.pendingAction = null;
+                        this.showBackConfirm = true;
+                    }
                 },
 
                 handleGlobalClick(e) {
                     if (this.isBypassing) return;
                     if (e.button !== 0) return;
                     if (e.ctrlKey || e.metaKey || e.shiftKey || e.altKey) return;
-                    if (!this.hasInputValues()) return;
-
-                    if (!document.body.contains(this.$el)) {
-                        this.destroy();
-                        return;
-                    }
+                    if (!document.body.contains(this.$el)) return;
 
                     // Jangan cegat klik di dalam dialog modal konfirmasi
                     const modalEl = this.$refs.confirmModal;
                     if (modalEl && modalEl.contains(e.target)) return;
 
-                    // 1. Cek apakah yang diklik adalah Link navigasi (<a>)
+                    // 1. Cek apakah yang diklik adalah link navigasi (<a>)
                     const link = e.target.closest('a');
                     if (link && link.href) {
                         if (link.target === '_blank') return;
@@ -124,25 +145,36 @@
                     }
                 },
 
+                handleNavigate(e) {
+                    if (this.isBypassing) return;
+                    if (!document.body.contains(this.$el)) return;
+
+                    const url = e.detail?.url?.href || (typeof e.detail?.url === 'string' ? e.detail.url : '');
+                    if (!url) return;
+
+                    // Cegat event navigasi Livewire / Alpine
+                    e.preventDefault();
+                    this.pendingUrl = url;
+                    this.pendingWireNavigate = true;
+                    this.pendingAction = null;
+                    this.showBackConfirm = true;
+                },
+
                 handlePopstate(event) {
-                    if (this.hasInputValues()) {
-                        this.pendingUrl = null;
-                        this.pendingAction = null;
-                        this.showBackConfirm = true;
-                        try {
-                            history.pushState({ evaluating: true }, '');
-                        } catch (err) {}
-                    } else {
-                        this.confirmLeave();
-                    }
+                    if (this.isBypassing) return;
+                    this.pendingUrl = null;
+                    this.pendingAction = () => { history.back(); };
+                    this.showBackConfirm = true;
+                    try {
+                        history.pushState({ evaluating: true }, '');
+                    } catch (err) {}
                 },
 
                 handleBeforeUnload(e) {
-                    if (this.hasInputValues()) {
-                        e.preventDefault();
-                        e.returnValue = '';
-                        return '';
-                    }
+                    if (this.isBypassing) return;
+                    e.preventDefault();
+                    e.returnValue = '';
+                    return '';
                 },
 
                 init() {
@@ -158,16 +190,29 @@
                         }
                     });
 
+                    const mousedownListener = (e) => this.handleGlobalMousedown(e);
                     const clickListener = (e) => this.handleGlobalClick(e);
+                    const navListener = (e) => this.handleNavigate(e);
                     const unloadListener = (e) => this.handleBeforeUnload(e);
 
+                    window.addEventListener('mousedown', mousedownListener, true);
                     window.addEventListener('click', clickListener, true);
+                    document.addEventListener('livewire:navigate', navListener);
+                    document.addEventListener('alpine:navigate', navListener);
                     window.addEventListener('beforeunload', unloadListener);
 
-                    this._cleanup = () => {
+                    const cleanup = () => {
+                        window.removeEventListener('mousedown', mousedownListener, true);
                         window.removeEventListener('click', clickListener, true);
+                        document.removeEventListener('livewire:navigate', navListener);
+                        document.removeEventListener('alpine:navigate', navListener);
                         window.removeEventListener('beforeunload', unloadListener);
                     };
+
+                    this._cleanup = cleanup;
+                    if (typeof this.$cleanup === 'function') {
+                        this.$cleanup(cleanup);
+                    }
                 },
 
                 destroy() {
