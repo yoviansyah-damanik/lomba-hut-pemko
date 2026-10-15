@@ -101,7 +101,7 @@
                     class="px-3 py-1.5 rounded-full text-sm font-medium {{ $school_type === '' ? 'bg-red-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-700' }}">
                     {{ __('Semua') }}
                 </button>
-                @foreach (\App\Livewire\Admin\Recap::SCHOOL_TYPES as $type)
+                @foreach ($competition->categories_list as $type)
                     <button wire:click="$set('school_type', '{{ $type }}')"
                         class="px-3 py-1.5 rounded-full text-sm font-medium {{ $school_type === $type ? 'bg-red-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-700' }}">
                         {{ $type }}

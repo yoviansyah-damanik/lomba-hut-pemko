@@ -55,6 +55,13 @@
                                     {{ $competition->start_time->translatedFormat('d M Y H:i') }} &ndash;
                                     {{ $competition->end_time->translatedFormat('d M Y H:i') }}
                                 </p>
+                                <div class="flex flex-wrap gap-1 mt-1.5">
+                                    @foreach ($competition->categories_list as $cat)
+                                        <span class="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] font-medium bg-gray-100 text-gray-700 dark:bg-gray-700/60 dark:text-gray-300">
+                                            {{ $cat }}
+                                        </span>
+                                    @endforeach
+                                </div>
                             </div>
                         </div>
                         @if ($isActive)
@@ -264,6 +271,53 @@
                 <x-input-error :messages="$errors->get('name')" class="mt-2" />
             </div>
 
+            {{-- Pemilihan Jenjang / Divisi Lomba --}}
+            <div class="p-3 bg-gray-50 dark:bg-gray-800/60 rounded-xl border border-gray-200 dark:border-gray-700 space-y-3">
+                <div>
+                    <x-input-label :value="__('Jenjang / Divisi Kategori Lomba')" />
+                    <div class="mt-2 grid grid-cols-1 sm:grid-cols-3 gap-2">
+                        @foreach (\App\Livewire\Admin\Competition::PRESETS as $key => $preset)
+                            <label class="flex items-center gap-2 p-2 rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 cursor-pointer text-xs">
+                                <input type="radio" wire:model.live="categoryPreset" value="{{ $key }}"
+                                    class="text-red-600 focus:ring-red-500">
+                                <span class="font-medium text-gray-800 dark:text-gray-200">{{ $preset['label'] }}</span>
+                            </label>
+                        @endforeach
+                    </div>
+                </div>
+
+                <div>
+                    <p class="text-xs font-semibold text-gray-700 dark:text-gray-300 mb-1.5">{{ __('Kategori Aktif Pada Lomba Ini:') }}</p>
+                    <div class="flex flex-wrap items-center gap-1.5">
+                        @forelse ($customCategories as $idx => $cat)
+                            <span class="inline-flex items-center gap-1 px-2.5 py-1 rounded-full text-xs font-semibold bg-red-100 text-red-800 dark:bg-red-950/60 dark:text-red-300">
+                                {{ $cat }}
+                                @if ($categoryPreset === 'custom' || count($customCategories) > 1)
+                                    <button type="button" wire:click="removeCustomCategory({{ $idx }})"
+                                        class="hover:text-red-900 dark:hover:text-red-100 text-red-500 font-bold ml-1" title="{{ __('Hapus kategori ini') }}">
+                                        &times;
+                                    </button>
+                                @endif
+                            </span>
+                        @empty
+                            <p class="text-xs text-red-500">{{ __('Belum ada kategori yang ditentukan.') }}</p>
+                        @endforelse
+                    </div>
+
+                    @if ($categoryPreset === 'custom')
+                        <div class="mt-2.5 flex items-center gap-2">
+                            <x-text-input wire:model="newCategoryInput" wire:keydown.enter.prevent="addCustomCategory"
+                                placeholder="{{ __('Ketik nama kategori baru lalu tekan Tambah...') }}"
+                                class="text-xs block w-full sm:w-72" />
+                            <x-secondary-button type="button" wire:click="addCustomCategory" class="text-xs">
+                                {{ __('+ Tambah Kategori') }}
+                            </x-secondary-button>
+                        </div>
+                    @endif
+                </div>
+                <x-input-error :messages="$errors->get('customCategories')" class="mt-1" />
+            </div>
+
             @php
                 $timeSelectClass =
                     'border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 focus:border-red-500 focus:ring-red-500 rounded-lg shadow-sm mt-1';
@@ -433,10 +487,14 @@
                 </div>
             @endif
 
+            @php
+                $competitionCategories = $this->currentCompetitionCategories();
+            @endphp
+
             <div>
-                <x-input-label :value="__('Jenjang Sekolah')" />
+                <x-input-label :value="__('Jenjang / Kategori')" />
                 <div class="mt-1 flex flex-wrap gap-4">
-                    @foreach (\App\Livewire\Admin\Competition::SCHOOL_TYPES as $type)
+                    @foreach ($competitionCategories as $type)
                         <label class="flex items-center gap-2">
                             <input type="checkbox" wire:model.live="criterionSchoolTypes" value="{{ $type }}"
                                 class="rounded dark:bg-gray-900 border-gray-300 dark:border-gray-700 text-red-600 shadow-sm focus:ring-red-500">
@@ -446,11 +504,11 @@
                 </div>
                 <x-input-error :messages="$errors->get('criterionSchoolTypes')" class="mt-2" />
                 <p class="mt-1 text-xs text-gray-400 dark:text-gray-500">
-                    {{ __('Jenjang yang dicentang wajib punya minimal satu juri penilai.') }}
+                    {{ __('Kategori yang dicentang wajib punya minimal satu juri penilai.') }}
                 </p>
             </div>
 
-            @foreach (\App\Livewire\Admin\Competition::SCHOOL_TYPES as $type)
+            @foreach ($competitionCategories as $type)
                 @if (in_array($type, $criterionSchoolTypes, true))
                     <div>
                         <x-input-label :value="__('Juri Penilai — :type', ['type' => $type])" />

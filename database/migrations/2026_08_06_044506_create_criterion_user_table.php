@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('criterion_user', function (Blueprint $table) {
             $table->foreignUuid('criterion_id')->constrained()->cascadeOnDelete();
             $table->foreignUuid('user_id')->constrained()->cascadeOnDelete();
-            $table->enum('school_type', ['SD', 'SMP', 'SMA', 'Umum']);
+            $table->string('school_type', 50);
             $table->timestamps();
             $table->primary(['criterion_id', 'user_id', 'school_type']);
         });

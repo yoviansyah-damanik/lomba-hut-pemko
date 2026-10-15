@@ -173,6 +173,7 @@ class DatabaseSeeder extends Seeder
 
         $competition = Competition::create([
             'name' => 'Lomba Drumband / Marching Band',
+            'categories' => ['Marching Band', 'Drum Band'],
             'start_time' => now()->subHour(),
             'end_time' => now()->addHours(6),
         ]);
@@ -216,7 +217,7 @@ class DatabaseSeeder extends Seeder
                 'competition_id' => $competition->id,
                 'name' => $def['name'],
                 'description' => $def['description'],
-                'school_types' => ['SD', 'SMP', 'SMA', 'Umum'],
+                'school_types' => ['Marching Band', 'Drum Band'],
                 'min_score' => $minScore,
                 'max_score' => $maxScore,
             ]);
@@ -244,26 +245,25 @@ class DatabaseSeeder extends Seeder
             ));
         }
 
-        // Pendaftaran peserta Drumband per jenjang
+        // Pendaftaran peserta Drumband / Marching Band per divisi
         $prefixes = [
-            'SD' => ['MB Bahana Cilik', 5],
-            'SMP' => ['Gita Bahana Pelajar', 5],
-            'SMA' => ['Gita Praja Muda', 5],
-            'Umum' => ['Marching Corps Praja', 5],
+            'Marching Band' => ['Marching Band Bahana Madani', 5],
+            'Drum Band' => ['Drum Band Gita Swara', 5],
         ];
 
-        foreach ($prefixes as $schoolType => [$unitName, $count]) {
+        foreach ($prefixes as $division => [$unitName, $count]) {
             for ($i = 1; $i <= $count; $i++) {
                 $participant = Participant::create([
-                    'school_name' => "{$unitName} {$schoolType} {$i}",
-                    'school_type' => $schoolType,
+                    'school_name' => "{$unitName} Unit {$i}",
+                    'school_type' => $division,
                 ]);
 
+                $code = $division === 'Marching Band' ? 'MB' : 'DB';
                 Registration::create([
                     'competition_id' => $competition->id,
                     'participant_id' => $participant->id,
-                    'school_type' => $schoolType,
-                    'npp' => "MB-{$schoolType}-".str_pad((string) $i, 2, '0', STR_PAD_LEFT),
+                    'school_type' => $division,
+                    'npp' => "{$code}-".str_pad((string) $i, 2, '0', STR_PAD_LEFT),
                 ]);
             }
         }

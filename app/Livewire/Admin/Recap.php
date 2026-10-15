@@ -58,8 +58,10 @@ class Recap extends Component
     public function mount(string $competitionId): void
     {
         $this->competitionId = $competitionId;
+        $competition = $this->competition();
+        $categories = $competition ? $competition->categories_list : self::SCHOOL_TYPES;
 
-        if ($this->school_type !== '' && ! in_array($this->school_type, self::SCHOOL_TYPES, true)) {
+        if ($this->school_type !== '' && ! in_array($this->school_type, $categories, true)) {
             $this->school_type = '';
         }
     }
@@ -101,7 +103,10 @@ class Recap extends Component
 
     public function openBeritaAcara(): void
     {
-        if (! in_array($this->school_type, self::SCHOOL_TYPES, true)) {
+        $competition = $this->competition();
+        $categories = $competition ? $competition->categories_list : self::SCHOOL_TYPES;
+
+        if (! in_array($this->school_type, $categories, true)) {
             return;
         }
 
@@ -117,9 +122,10 @@ class Recap extends Component
     public function downloadBeritaAcara()
     {
         $competition = $this->competition();
+        $categories = $competition ? $competition->categories_list : self::SCHOOL_TYPES;
 
         abort_unless($competition, 404);
-        abort_unless(in_array($this->school_type, self::SCHOOL_TYPES, true), 422);
+        abort_unless(in_array($this->school_type, $categories, true), 422);
 
         $this->validate([
             'beritaAcaraTempat' => ['required', 'string', 'max:255'],

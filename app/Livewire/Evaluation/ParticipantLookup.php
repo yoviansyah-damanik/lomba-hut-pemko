@@ -18,9 +18,7 @@ class ParticipantLookup extends Component
     #[Validate('required|string', as: 'NPP')]
     public string $npp = '';
 
-    #[Session]
-    #[Validate('required|in:SD,SMP,SMA,Umum', as: 'jenis sekolah')]
-    public string $school_type = 'SD';
+    public string $school_type = '';
 
     public ?Registration $registration = null;
 
@@ -34,6 +32,33 @@ class ParticipantLookup extends Component
 
         if ($competitions->count() === 1) {
             $this->competitionId = $competitions->first()->id;
+        }
+
+        $this->syncSchoolType();
+    }
+
+    public function updatedCompetitionId(): void
+    {
+        $this->syncSchoolType();
+    }
+
+    public function currentCategories(): array
+    {
+        if ($this->competitionId) {
+            $competition = Competition::find($this->competitionId);
+            if ($competition) {
+                return $competition->categories_list;
+            }
+        }
+
+        return ['SD', 'SMP', 'SMA', 'Umum'];
+    }
+
+    protected function syncSchoolType(): void
+    {
+        $categories = $this->currentCategories();
+        if ($this->school_type === '' || ! in_array($this->school_type, $categories, true)) {
+            $this->school_type = $categories[0] ?? 'SD';
         }
     }
 
@@ -62,7 +87,17 @@ class ParticipantLookup extends Component
 
     public function search(): void
     {
-        $this->validate();
+        $categories = $this->currentCategories();
+
+        $this->validate([
+            'competitionId' => ['required', 'exists:competitions,id'],
+            'npp' => ['required', 'string'],
+            'school_type' => ['required', 'string', 'in:'.implode(',', $categories)],
+        ], attributes: [
+            'competitionId' => __('lomba'),
+            'npp' => __('NPP'),
+            'school_type' => __('kategori'),
+        ]);
 
         $this->registration = Registration::with(['participant', 'competition'])
             ->where('competition_id', $this->competitionId)

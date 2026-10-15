@@ -14,7 +14,7 @@ return new class extends Migration
         Schema::create('participants', function (Blueprint $table) {
             $table->uuid('id')->primary();
             $table->string('school_name');
-            $table->enum('school_type', ['SD', 'SMP', 'SMA', 'Umum']);
+            $table->string('school_type', 50);
             $table->timestamps();
         });
     }

@@ -12,16 +12,18 @@ class Board extends Component
     public const SCHOOL_TYPES = ['SD', 'SMP', 'SMA', 'Umum'];
 
     #[Url]
-    public string $school_type = 'SD';
+    public string $school_type = '';
 
     public string $competitionId;
 
     public function mount(string $competitionId): void
     {
         $this->competitionId = $competitionId;
+        $competition = Competition::find($this->competitionId);
+        $categories = $competition ? $competition->categories_list : self::SCHOOL_TYPES;
 
-        if (! in_array($this->school_type, self::SCHOOL_TYPES, true)) {
-            $this->school_type = 'SD';
+        if ($this->school_type === '' || ! in_array($this->school_type, $categories, true)) {
+            $this->school_type = $categories[0] ?? 'SD';
         }
     }
 
@@ -31,6 +33,12 @@ class Board extends Component
             ->where('id', $this->competitionId)
             ->where('rank_open', true)
             ->first();
+
+        $categories = $competition ? $competition->categories_list : self::SCHOOL_TYPES;
+
+        if ($this->school_type === '' || ! in_array($this->school_type, $categories, true)) {
+            $this->school_type = $categories[0] ?? 'SD';
+        }
 
         $registrations = collect();
 
@@ -70,7 +78,7 @@ class Board extends Component
                 ->groupBy('school_type')
                 ->pluck('total', 'school_type');
 
-            foreach (self::SCHOOL_TYPES as $type) {
+            foreach ($categories as $type) {
                 $schoolTypeCounts[$type] = (int) ($counts[$type] ?? 0);
             }
             $totalParticipants = array_sum($schoolTypeCounts);
@@ -81,6 +89,7 @@ class Board extends Component
             'participants' => $registrations,
             'maskIdentity' => $competition && $competition->hide_identity,
             'schoolTypeCounts' => $schoolTypeCounts,
+            'categories' => $categories,
             'totalParticipants' => $totalParticipants,
         ]);
     }

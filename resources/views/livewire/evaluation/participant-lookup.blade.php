@@ -77,14 +77,14 @@
                         </div>
 
                         <div>
-                            <x-input-label for="school_type" :value="__('Jenis Sekolah')" />
+                            <x-input-label for="school_type" :value="__('Jenjang / Kategori')" />
                             <select wire:model="school_type" id="school_type" autocomplete="off"
                                 class="border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 focus:border-red-500 focus:ring-red-500 rounded-md shadow-sm mt-1 block w-full">
-                                <option value="SD">SD</option>
-                                <option value="SMP">SMP</option>
-                                <option value="SMA">SMA</option>
-                                <option value="Umum">Umum</option>
+                                @foreach ($this->currentCategories() as $cat)
+                                    <option value="{{ $cat }}">{{ $cat }}</option>
+                                @endforeach
                             </select>
+                            <x-input-error :messages="$errors->get('school_type')" class="mt-2" />
                         </div>
                     </div>
 

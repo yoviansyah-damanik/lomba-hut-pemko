@@ -39,8 +39,8 @@
             <p class="text-xs text-gray-400 dark:text-gray-500 mb-2">
                 {{ __('Belum tahu identitas sekolahnya? Isi jumlah kuota per jenjang, NPP & nama sementara dibuat otomatis. Identitas bisa disinkronkan kapan saja.') }}
             </p>
-            <div class="grid grid-cols-3 gap-2">
-                @foreach (\App\Livewire\Admin\CompetitionParticipants::SCHOOL_TYPES as $type)
+            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2">
+                @foreach ($competition->categories_list as $type)
                     <div>
                         <x-input-label :for="'slot-' . $type" :value="$type" />
                         <x-text-input wire:model="slotCounts.{{ $type }}" :id="'slot-' . $type" type="number"
@@ -85,8 +85,8 @@
             </div>
 
             @php $countsByType = $registrations->countBy('school_type'); @endphp
-            <div class="grid grid-cols-3 gap-2 mb-3">
-                @foreach (\App\Livewire\Admin\CompetitionParticipants::SCHOOL_TYPES as $type)
+            <div class="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-2 mb-3">
+                @foreach ($competition->categories_list as $type)
                     <div class="bg-gray-50 dark:bg-gray-900/40 rounded-lg p-2 text-center">
                         <p class="text-lg font-semibold text-gray-900 dark:text-gray-100">
                             {{ $countsByType->get($type, 0) }}</p>
@@ -100,7 +100,7 @@
                     class="px-3 py-1.5 rounded-full text-sm font-medium {{ $registeredFilter === '' ? 'bg-red-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-700' }}">
                     {{ __('Semua') }}
                 </button>
-                @foreach (\App\Livewire\Admin\CompetitionParticipants::SCHOOL_TYPES as $type)
+                @foreach ($competition->categories_list as $type)
                     <button type="button" wire:click="$set('registeredFilter', '{{ $type }}')"
                         class="px-3 py-1.5 rounded-full text-sm font-medium {{ $registeredFilter === $type ? 'bg-red-600 text-white' : 'bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-300 border border-gray-300 dark:border-gray-700' }}">
                         {{ $type }}
@@ -220,11 +220,11 @@
                 <x-text-input wire:model.live.debounce.300ms="search" type="text" class="block w-full"
                     :placeholder="__('Cari nama sekolah...')" />
                 <select wire:model.live="school_type"
-                    class="border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 focus:border-red-500 focus:ring-red-500 rounded-lg shadow-sm sm:w-32">
-                    <option value="">{{ __('Semua Jenjang') }}</option>
-                    <option value="SD">SD</option>
-                    <option value="SMP">SMP</option>
-                    <option value="SMA">SMA</option>
+                    class="border-gray-300 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-300 focus:border-red-500 focus:ring-red-500 rounded-lg shadow-sm sm:w-44">
+                    <option value="">{{ __('Semua Kategori') }}</option>
+                    @foreach ($competition->categories_list as $cat)
+                        <option value="{{ $cat }}">{{ $cat }}</option>
+                    @endforeach
                 </select>
             </div>
 

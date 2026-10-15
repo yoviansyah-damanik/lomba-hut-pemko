@@ -44,6 +44,8 @@ class CompetitionParticipants extends Component
     public function mount(string $competitionId): void
     {
         $this->competitionId = $competitionId;
+        $competition = $this->competition();
+        $this->slotCounts = array_fill_keys($competition->categories_list, 0);
     }
 
     public function setTab(string $tab): void
@@ -64,10 +66,11 @@ class CompetitionParticipants extends Component
     public function generateSlots(): void
     {
         $competition = $this->competition();
+        $categories = $competition->categories_list;
         $generated = false;
         $digits = in_array($this->nppDigits, [2, 3], true) ? $this->nppDigits : 3;
 
-        foreach (self::SCHOOL_TYPES as $type) {
+        foreach ($categories as $type) {
             $count = (int) ($this->slotCounts[$type] ?? 0);
 
             if ($count <= 0) {
@@ -90,7 +93,7 @@ class CompetitionParticipants extends Component
         }
 
         if ($generated) {
-            $this->slotCounts = ['SD' => 0, 'SMP' => 0, 'SMA' => 0, 'Umum' => 0];
+            $this->slotCounts = array_fill_keys($categories, 0);
             $this->activeTab = 'registered';
         }
     }

@@ -105,7 +105,7 @@
             </div>
 
             <div class="inline-flex p-1.5 rounded-2xl bg-slate-200/80 dark:bg-slate-800/80 backdrop-blur-md border border-slate-300/60 dark:border-slate-700/60 shadow-inner overflow-x-auto">
-                @foreach (\App\Livewire\LiveRank\Board::SCHOOL_TYPES as $type)
+                @foreach ($categories as $type)
                     @php
                         $count = $schoolTypeCounts[$type] ?? 0;
                         $isActive = $school_type === $type;
@@ -133,14 +133,14 @@
                     {{ __('Belum Ada Nilai Masuk') }}
                 </h3>
                 <p class="mt-2 text-sm text-slate-500 dark:text-slate-400 max-w-md mx-auto">
-                    {{ __('Dewan juri belum memasukkan penilaian untuk peserta pada kategori jenjang :type.', ['type' => $school_type]) }}
+                    {{ __('Dewan juri belum memasukkan penilaian untuk peserta pada kategori :type.', ['type' => $school_type]) }}
                 </p>
                 <div class="mt-6 flex justify-center gap-2">
-                    @foreach (\App\Livewire\LiveRank\Board::SCHOOL_TYPES as $type)
+                    @foreach ($categories as $type)
                         @if ($type !== $school_type && ($schoolTypeCounts[$type] ?? 0) > 0)
                             <button type="button" wire:click="$set('school_type', '{{ $type }}')"
                                 class="px-3 py-1.5 rounded-xl text-xs font-semibold bg-slate-100 dark:bg-slate-700 hover:bg-slate-200 dark:hover:bg-slate-600 text-slate-700 dark:text-slate-200 transition">
-                                {{ __('Lihat Jenjang :type', ['type' => $type]) }} &rarr;
+                                {{ __('Lihat Kategori :type', ['type' => $type]) }} &rarr;
                             </button>
                         @endif
                     @endforeach

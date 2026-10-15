@@ -60,6 +60,14 @@ class Competition extends Component
 
     public ?string $managingParticipantsFor = null;
 
+    // Kategori lomba
+    public string $categoryPreset = 'school';
+
+    /** @var array<string> */
+    public array $customCategories = ['SD', 'SMP', 'SMA', 'Umum'];
+
+    public string $newCategoryInput = '';
+
     // Form kriteria
     public bool $showCriterionModal = false;
 
@@ -81,11 +89,17 @@ class Competition extends Component
 
     public const SCHOOL_TYPES = ['SD', 'SMP', 'SMA', 'Umum'];
 
+    public const PRESETS = [
+        'school' => ['label' => 'Jenjang Sekolah (SD, SMP, SMA, Umum)', 'categories' => ['SD', 'SMP', 'SMA', 'Umum']],
+        'marching_band' => ['label' => 'Divisi Band (Marching Band, Drum Band)', 'categories' => ['Marching Band', 'Drum Band']],
+        'custom' => ['label' => 'Kustom (Tentukan sendiri)', 'categories' => []],
+    ];
+
     /** @var array<string> */
     public array $criterionSchoolTypes = ['SD', 'SMP', 'SMA', 'Umum'];
 
     /** @var array<string, array<string>> */
-    public array $judgeIdsBySchoolType = ['SD' => [], 'SMP' => [], 'SMA' => [], 'Umum' => []];
+    public array $judgeIdsBySchoolType = [];
 
     public function updatedHasSubItems(bool $value): void
     {
@@ -143,9 +157,33 @@ class Competition extends Component
         $this->resetPage();
     }
 
+    public function updatedCategoryPreset(string $preset): void
+    {
+        if (isset(self::PRESETS[$preset]) && $preset !== 'custom') {
+            $this->customCategories = self::PRESETS[$preset]['categories'];
+        }
+    }
+
+    public function addCustomCategory(): void
+    {
+        $name = trim($this->newCategoryInput);
+        if ($name !== '' && ! in_array($name, $this->customCategories, true)) {
+            $this->customCategories[] = $name;
+            $this->newCategoryInput = '';
+        }
+    }
+
+    public function removeCustomCategory(int $index): void
+    {
+        unset($this->customCategories[$index]);
+        $this->customCategories = array_values($this->customCategories);
+    }
+
     protected function resetScheduleFields(): void
     {
-        $this->reset(['editing', 'name', 'start_date', 'start_hour', 'start_minute', 'end_date', 'end_hour', 'end_minute']);
+        $this->reset(['editing', 'name', 'start_date', 'start_hour', 'start_minute', 'end_date', 'end_hour', 'end_minute', 'newCategoryInput']);
+        $this->categoryPreset = 'school';
+        $this->customCategories = self::PRESETS['school']['categories'];
         $this->start_hour = $this->end_hour = '00';
         $this->start_minute = $this->end_minute = '00';
     }
@@ -166,6 +204,17 @@ class Competition extends Component
         $this->end_date = $competition->end_time->format('Y-m-d');
         $this->end_hour = $competition->end_time->format('H');
         $this->end_minute = $competition->end_time->format('i');
+
+        $cats = $competition->categories_list;
+        $this->customCategories = $cats;
+        if ($cats === self::PRESETS['school']['categories']) {
+            $this->categoryPreset = 'school';
+        } elseif ($cats === self::PRESETS['marching_band']['categories']) {
+            $this->categoryPreset = 'marching_band';
+        } else {
+            $this->categoryPreset = 'custom';
+        }
+
         $this->showModal = true;
     }
 
@@ -181,6 +230,11 @@ class Competition extends Component
             'end_date' => ['required', 'date_format:Y-m-d'],
             'end_hour' => $hourRule,
             'end_minute' => ['required', 'digits:2'],
+            'customCategories' => ['required', 'array', 'min:1'],
+            'customCategories.*' => ['required', 'string', 'max:50'],
+        ], [
+            'customCategories.min' => __('Pilih atau tentukan minimal satu jenjang/kategori lomba.'),
+            'customCategories.*.required' => __('Nama kategori tidak boleh kosong.'),
         ]);
 
         $startTime = Carbon::createFromFormat('Y-m-d H:i', "{$validated['start_date']} {$validated['start_hour']}:{$validated['start_minute']}");
@@ -192,7 +246,14 @@ class Competition extends Component
             ]);
         }
 
-        $payload = ['name' => $validated['name'], 'start_time' => $startTime, 'end_time' => $endTime];
+        $categories = array_values(array_unique(array_filter(array_map('trim', $this->customCategories))));
+
+        $payload = [
+            'name' => $validated['name'],
+            'categories' => $categories,
+            'start_time' => $startTime,
+            'end_time' => $endTime,
+        ];
 
         if ($this->editing) {
             $this->editing->update($payload);
@@ -224,6 +285,18 @@ class Competition extends Component
         $this->expandedId = $this->expandedId === $competitionId ? null : $competitionId;
     }
 
+    public function currentCompetitionCategories(): array
+    {
+        if ($this->expandedId) {
+            $comp = CompetitionModel::find($this->expandedId);
+            if ($comp) {
+                return $comp->categories_list;
+            }
+        }
+
+        return self::SCHOOL_TYPES;
+    }
+
     public function manageParticipants(string $competitionId): void
     {
         $this->managingParticipantsFor = $competitionId;
@@ -241,8 +314,9 @@ class Competition extends Component
         $this->reset(['editingCriterion', 'criterion_name', 'criterion_description', 'has_sub_items', 'subItems']);
         $this->criterion_min_score = 0;
         $this->criterion_max_score = 100;
-        $this->criterionSchoolTypes = ['SD', 'SMP', 'SMA', 'Umum'];
-        $this->judgeIdsBySchoolType = ['SD' => [], 'SMP' => [], 'SMA' => [], 'Umum' => []];
+        $cats = $this->currentCompetitionCategories();
+        $this->criterionSchoolTypes = $cats;
+        $this->judgeIdsBySchoolType = array_fill_keys($cats, []);
         $this->showCriterionModal = true;
     }
 
@@ -269,7 +343,8 @@ class Competition extends Component
             $this->subItems = [];
         }
 
-        $this->judgeIdsBySchoolType = ['SD' => [], 'SMP' => [], 'SMA' => [], 'Umum' => []];
+        $cats = $this->currentCompetitionCategories();
+        $this->judgeIdsBySchoolType = array_fill_keys($cats, []);
         foreach ($criterion->judges as $judge) {
             $this->judgeIdsBySchoolType[$judge->pivot->school_type][] = $judge->id;
         }
@@ -279,11 +354,14 @@ class Competition extends Component
 
     public function saveCriterion(): void
     {
+        $validCategories = $this->currentCompetitionCategories();
+        $inCategoriesRule = 'in:'.implode(',', $validCategories);
+
         $rules = [
             'criterion_name' => ['required', 'string', 'max:255'],
             'criterion_description' => ['nullable', 'string'],
             'criterionSchoolTypes' => ['required', 'array', 'min:1'],
-            'criterionSchoolTypes.*' => ['in:SD,SMP,SMA,Umum'],
+            'criterionSchoolTypes.*' => [$inCategoriesRule],
         ];
 
         if ($this->has_sub_items) {
