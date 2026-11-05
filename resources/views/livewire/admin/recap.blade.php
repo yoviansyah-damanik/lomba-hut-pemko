@@ -572,10 +572,15 @@
             </p>
         @endif
 
-        <p class="hidden print:block mt-6 pt-3 border-t border-gray-300 text-center text-[10px] text-gray-400">
-            {{ __('Bidang Humas dan Informatika Kwartir Cabang Gerakan Pramuka Kota Padangsidimpuan') }} &middot;
-            {{ __('Dicetak melalui :app (:url) pada :time', ['app' => config('app.name'), 'url' => config('app.url'), 'time' => now()->translatedFormat('d M Y H:i')]) }}
-        </p>
+        <div class="hidden print:flex justify-between items-end mt-6 pt-3 border-t border-gray-300 text-[10px] text-gray-500">
+            <div class="text-left space-y-0.5">
+                <div class="font-medium text-gray-700">{{ config('app.name') }} | {{ config('app.url') }}</div>
+                <div>{{ __('Bidang Humas dan Informatika Kwartir Cabang Gerakan Pramuka Kota Padangsidimpuan') }}</div>
+            </div>
+            <div class="text-right space-y-0.5">
+                <div>{{ __('Dicetak :time', ['time' => now()->translatedFormat('d M Y H:i')]) }}</div>
+            </div>
+        </div>
 
         <x-simple-modal :show="(bool) $tieClusterKey" show-property="tieClusterKey" max-width="max-w-3xl">
             @if ($tieCluster)

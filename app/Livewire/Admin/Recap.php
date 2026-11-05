@@ -218,10 +218,13 @@ class Recap extends Component
     }
 
     /**
-     * Menulis footer (kiri: penyelenggara, kanan: waktu cetak + nomor halaman) langsung
-     * ke canvas PDF. Nomor halaman total ({PAGE_COUNT}) hanya akurat lewat
-     * Canvas::page_text(), karena counter(pages) via CSS tidak didukung dompdf
-     * pada elemen fixed.
+     * Menulis footer dua baris langsung ke canvas PDF:
+     * Kiri:
+     *   Baris 1: Nama Aplikasi | URL
+     *   Baris 2: Bidang Humas dan Informatika Kwartir Cabang Gerakan Pramuka Kota Padangsidimpuan
+     * Kanan:
+     *   Baris 1: Waktu Cetak
+     *   Baris 2: Halaman {PAGE_NUM} dari {PAGE_COUNT}
      */
     private function stampFooter(\Barryvdh\DomPDF\PDF $pdf): void
     {
@@ -230,44 +233,41 @@ class Recap extends Component
         $canvas = $pdf->getCanvas();
         $fontMetrics = $pdf->getFontMetrics();
         $font = $fontMetrics->getFont('DejaVu Sans');
-        $color = [0.5, 0.5, 0.5];
-        $margin = 24;
+        $color = [0.45, 0.45, 0.45];
         $size = 7;
-
-        $left = __(':owner &mdash; :app (:url)', [
-            'owner' => 'Bidang Humas dan Informatika Kwartir Cabang Gerakan Pramuka Kota Padangsidimpuan',
-            'app' => config('app.name'),
-            'url' => config('app.url'),
-        ]);
-        $left = html_entity_decode($left, ENT_QUOTES);
-
-        $printedAt = now()->translatedFormat('d M Y H:i');
-        $totalPages = $canvas->get_page_count();
-
-        $right = html_entity_decode(
-            __('Dicetak :time &mdash; Halaman {PAGE_NUM} dari {PAGE_COUNT}', ['time' => $printedAt]),
-            ENT_QUOTES
-        );
-
-        // {PAGE_NUM}/{PAGE_COUNT} baru disubstitusi dompdf saat output; lebar diukur
-        // memakai skenario terlebar (nomor halaman = total halaman) agar teks tetap
-        // rata kanan meski nanti digit nomor halaman berbeda-beda per halaman.
-        $widestRight = html_entity_decode(
-            __('Dicetak :time &mdash; Halaman :page dari :total', [
-                'time' => $printedAt,
-                'page' => $totalPages,
-                'total' => $totalPages,
-            ]),
-            ENT_QUOTES
-        );
 
         $pageWidth = $canvas->get_width();
         $pageHeight = $canvas->get_height();
-        $bottomOffset = 20;
-        $rightWidth = $fontMetrics->getTextWidth($widestRight, $font, $size);
+        $margin = $pageWidth > 600 ? 24 : 48;
 
-        $canvas->page_text($margin, $pageHeight - $bottomOffset, $left, $font, $size, $color);
-        $canvas->page_text($pageWidth - $margin - $rightWidth, $pageHeight - $bottomOffset, $right, $font, $size, $color);
+        // Kiri
+        $leftLine1 = html_entity_decode(config('app.name').' | '.config('app.url'), ENT_QUOTES);
+        $leftLine2 = html_entity_decode(__('Bidang Humas dan Informatika Kwartir Cabang Gerakan Pramuka Kota Padangsidimpuan'), ENT_QUOTES);
+
+        // Kanan
+        $printedAt = now()->translatedFormat('d M Y H:i');
+        $rightLine1 = html_entity_decode(__('Dicetak :time', ['time' => $printedAt]), ENT_QUOTES);
+        $rightLine2 = html_entity_decode(__('Halaman {PAGE_NUM} dari {PAGE_COUNT}'), ENT_QUOTES);
+
+        $totalPages = $canvas->get_page_count();
+        $widestRightLine2 = html_entity_decode(__('Halaman :page dari :total', [
+            'page' => $totalPages,
+            'total' => $totalPages,
+        ]), ENT_QUOTES);
+
+        $line1Y = $pageHeight - 24;
+        $line2Y = $pageHeight - 14;
+
+        $rightWidth1 = $fontMetrics->getTextWidth($rightLine1, $font, $size);
+        $rightWidth2 = $fontMetrics->getTextWidth($widestRightLine2, $font, $size);
+
+        // Baris 1: Aplikasi | URL (kiri) & Waktu Cetak (kanan)
+        $canvas->page_text($margin, $line1Y, $leftLine1, $font, $size, $color);
+        $canvas->page_text($pageWidth - $margin - $rightWidth1, $line1Y, $rightLine1, $font, $size, $color);
+
+        // Baris 2: Bidang Humas ... (kiri) & Halaman (kanan)
+        $canvas->page_text($margin, $line2Y, $leftLine2, $font, $size, $color);
+        $canvas->page_text($pageWidth - $margin - $rightWidth2, $line2Y, $rightLine2, $font, $size, $color);
     }
 
     public function openTieOrder(string $schoolType, int $totalScore): void
