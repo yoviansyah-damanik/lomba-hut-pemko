@@ -311,4 +311,70 @@ class RecapAdjustmentTest extends TestCase
             ->assertSee('Belum lengkap')
             ->assertSee('Belum dinilai');
     }
+
+    public function test_recap_renders_with_different_competition_schedule_statuses(): void
+    {
+        $admin = User::factory()->admin()->create();
+
+        // Lomba yang belum dimulai (upcoming)
+        $upcoming = Competition::create([
+            'name' => 'Lomba Mendatang',
+            'start_time' => now()->addDay(),
+            'end_time' => now()->addDays(2),
+        ]);
+
+        $this->assertTrue($upcoming->isUpcoming());
+        $this->assertFalse($upcoming->isActive());
+        $this->assertFalse($upcoming->isPast());
+
+        Livewire::actingAs($admin)
+            ->test(Recap::class, ['competitionId' => $upcoming->id])
+            ->assertSuccessful()
+            ->assertSee('Terjadwal');
+
+        // Lomba yang sudah selesai (past)
+        $past = Competition::create([
+            'name' => 'Lomba Selesai',
+            'start_time' => now()->subDays(2),
+            'end_time' => now()->subDay(),
+        ]);
+
+        $this->assertFalse($past->isUpcoming());
+        $this->assertFalse($past->isActive());
+        $this->assertTrue($past->isPast());
+
+        Livewire::actingAs($admin)
+            ->test(Recap::class, ['competitionId' => $past->id])
+            ->assertSuccessful()
+            ->assertSee('Selesai');
+    }
+
+    public function test_pdf_recap_supports_marching_band_and_custom_categories(): void
+    {
+        $admin = User::factory()->admin()->create();
+
+        $competition = Competition::create([
+            'name' => 'Lomba Marching Band',
+            'categories' => ['Marching Band', 'Drum Band'],
+            'start_time' => now()->subHour(),
+            'end_time' => now()->addHours(2),
+        ]);
+
+        $participant = Participant::create([
+            'school_name' => 'Gita Bahana',
+            'school_type' => 'Marching Band',
+        ]);
+
+        Registration::create([
+            'competition_id' => $competition->id,
+            'participant_id' => $participant->id,
+            'school_type' => 'Marching Band',
+            'npp' => 'MB-01',
+        ]);
+
+        Livewire::actingAs($admin)
+            ->test(Recap::class, ['competitionId' => $competition->id])
+            ->call('downloadPdf')
+            ->assertFileDownloaded();
+    }
 }

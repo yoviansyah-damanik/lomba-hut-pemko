@@ -116,6 +116,21 @@
             color: #b45309;
         }
 
+        .badge-marching-band {
+            background-color: #ffe4e6;
+            color: #be123c;
+        }
+
+        .badge-drum-band {
+            background-color: #e0e7ff;
+            color: #4338ca;
+        }
+
+        .badge-default {
+            background-color: #f3f4f6;
+            color: #374151;
+        }
+
         .incomplete {
             color: #b45309;
         }
@@ -210,6 +225,8 @@
                 'SMP' => 'badge-smp',
                 'SMA' => 'badge-sma',
                 'Umum' => 'badge-umum',
+                'Marching Band' => 'badge-marching-band',
+                'Drum Band' => 'badge-drum-band',
             ];
         @endphp
         <table class="recap">
@@ -237,7 +254,7 @@
                             @endif
                         </td>
                         <td style="width:60px; text-align:center;"><span
-                                class="badge {{ $badgeClass[$row->registration->school_type] }}">{{ $row->registration->school_type }}</span>
+                                class="badge {{ $badgeClass[$row->registration->school_type] ?? 'badge-default' }}">{{ $row->registration->school_type }}</span>
                         </td>
                         @foreach ($competition->criteria as $criterion)
                             @php $score = $row->criteria_scores[$criterion->id]; @endphp

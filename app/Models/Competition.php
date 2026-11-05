@@ -43,6 +43,16 @@ class Competition extends Model
         return $now->between($this->start_time, $this->end_time);
     }
 
+    public function isUpcoming(): bool
+    {
+        return Carbon::now()->lt($this->start_time);
+    }
+
+    public function isPast(): bool
+    {
+        return Carbon::now()->gt($this->end_time);
+    }
+
     /** @return HasMany<Criterion, $this> */
     public function criteria(): HasMany
     {
