@@ -75,7 +75,7 @@
                                 {{ $activeComp->name }}
                             </h4>
                             <p class="text-xs text-gray-500 dark:text-gray-400 mt-1 line-clamp-1">
-                                {{ $activeComp->location ?? __('Lokasi belum ditentukan') }}
+                                {{ $activeComp->start_time->translatedFormat('H:i') }} &ndash; {{ $activeComp->end_time->translatedFormat('H:i') }}
                             </p>
                         </div>
                         <div class="mt-4 pt-3 border-t border-gray-100 dark:border-gray-700 flex items-center justify-end">
@@ -108,7 +108,7 @@
             <div class="h-full rounded-full bg-red-500 transition-all duration-500" style="width: {{ $percentage }}%"></div>
         </div>
         <div class="mt-2.5 flex items-center justify-between text-xs text-gray-400 dark:text-gray-500">
-            <span>{{ __('Tersisa :count dari total :total peserta', ['count' => $remainingCount, 'total' => $totalAssigned]) }}</span>
+            <span>{{ __('Tersisa :count dari total :total penilaian', ['count' => $remainingCount, 'total' => $totalAssigned]) }}</span>
             <span>{{ __(':completed dinilai', ['completed' => $totalCompleted]) }}</span>
         </div>
     </div>
@@ -179,8 +179,8 @@
                             </x-slot:label>
                         </x-charts.meter>
                         <p class="mt-1 text-xs text-gray-400 dark:text-gray-500">
-                            {{ $criterion->competition->name }}
-                            @if ($criterion->competition->isActive())
+                            {{ $criterion->competition?->name }}
+                            @if ($criterion->competition?->isActive())
                                 <span class="ms-1 inline-flex items-center px-1.5 py-0.5 rounded-full text-[10px] font-medium bg-green-100 text-green-800 dark:bg-green-900/40 dark:text-green-300">{{ __('Berlangsung') }}</span>
                             @endif
                         </p>

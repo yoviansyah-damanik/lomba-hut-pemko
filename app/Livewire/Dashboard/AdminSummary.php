@@ -45,9 +45,11 @@ class AdminSummary extends Component
 
     public function render()
     {
-        $registrationCountByCompetition = Registration::selectRaw('competition_id, count(*) as total')
-            ->groupBy('competition_id')
-            ->pluck('total', 'competition_id');
+        // Hitung registrasi per competition_id dan school_type dalam 1 kueri agregasi
+        $registrationCountsByCompAndType = Registration::selectRaw('competition_id, school_type, count(*) as total')
+            ->groupBy('competition_id', 'school_type')
+            ->get()
+            ->keyBy(fn ($r) => $r->competition_id.'|'.$r->school_type);
 
         // Pre-fetch evaluasi per kompetisi dalam 1 kueri agregasi
         $evaluationsCountByCompetition = Evaluation::join('criteria', 'evaluations.criterion_id', '=', 'criteria.id')
@@ -57,9 +59,14 @@ class AdminSummary extends Component
 
         $competitions = Competition::with('criteria.judges')->get();
 
-        $competitionProgress = $competitions->map(function (Competition $competition) use ($registrationCountByCompetition, $evaluationsCountByCompetition) {
-            $registrationCount = $registrationCountByCompetition[$competition->id] ?? 0;
-            $expected = $competition->criteria->sum(fn (Criterion $criterion) => $criterion->judges->count()) * $registrationCount;
+        $competitionProgress = $competitions->map(function (Competition $competition) use ($registrationCountsByCompAndType, $evaluationsCountByCompetition) {
+            $expected = $competition->criteria->sum(function (Criterion $criterion) use ($registrationCountsByCompAndType) {
+                return $criterion->judges->sum(function (User $judge) use ($criterion, $registrationCountsByCompAndType) {
+                    $key = $criterion->competition_id.'|'.$judge->pivot->school_type;
+
+                    return $registrationCountsByCompAndType->get($key)?->total ?? 0;
+                });
+            });
             $actual = $evaluationsCountByCompetition[$competition->id] ?? 0;
 
             return [
@@ -82,8 +89,12 @@ class AdminSummary extends Component
             ->with('criteria')
             ->withCount('evaluations')
             ->get()
-            ->map(function (User $judge) use ($registrationCountByCompetition) {
-                $max = $judge->criteria->sum(fn (Criterion $criterion) => $registrationCountByCompetition[$criterion->competition_id] ?? 0);
+            ->map(function (User $judge) use ($registrationCountsByCompAndType) {
+                $max = $judge->criteria->sum(function (Criterion $criterion) use ($registrationCountsByCompAndType) {
+                    $key = $criterion->competition_id.'|'.$criterion->pivot->school_type;
+
+                    return $registrationCountsByCompAndType->get($key)?->total ?? 0;
+                });
 
                 return [
                     'label' => $judge->name,

@@ -92,4 +92,71 @@ class DashboardTest extends TestCase
             ->assertOk()
             ->assertSee('animate-pulse');
     }
+
+    public function test_admin_summary_judge_progress_calculates_max_based_on_assigned_criterion_and_school_type(): void
+    {
+        $admin = User::factory()->create(['role' => 'admin', 'name' => 'Admin']);
+        $judge = User::factory()->create(['role' => 'judge', 'name' => 'Juri 1']);
+
+        // Buat kompetisi dengan 3 kriteria
+        $competition = Competition::create([
+            'name' => 'Lomba Pramuka',
+            'start_time' => now()->subDay(),
+            'end_time' => now()->addDay(),
+        ]);
+
+        $c1 = Criterion::create([
+            'competition_id' => $competition->id,
+            'name' => 'Kerapian',
+            'school_types' => ['SD', 'SMP', 'SMA'],
+            'min_score' => 0,
+            'max_score' => 100,
+        ]);
+
+        $c2 = Criterion::create([
+            'competition_id' => $competition->id,
+            'name' => 'Kekompakan',
+            'school_types' => ['SD', 'SMP', 'SMA'],
+            'min_score' => 0,
+            'max_score' => 100,
+        ]);
+
+        $c3 = Criterion::create([
+            'competition_id' => $competition->id,
+            'name' => 'Kreativitas',
+            'school_types' => ['SD', 'SMP', 'SMA'],
+            'min_score' => 0,
+            'max_score' => 100,
+        ]);
+
+        // Juri hanya ditugaskan pada Kriteria 1 (untuk SD, SMP, SMA)
+        $c1->judges()->attach($judge->id, ['school_type' => 'SD']);
+        $c1->judges()->attach($judge->id, ['school_type' => 'SMP']);
+        $c1->judges()->attach($judge->id, ['school_type' => 'SMA']);
+
+        // Buat total 38 peserta (15 SD, 13 SMP, 10 SMA)
+        for ($i = 1; $i <= 15; $i++) {
+            $p = Participant::create(['school_name' => "SD $i", 'school_type' => 'SD']);
+            Registration::create(['competition_id' => $competition->id, 'participant_id' => $p->id, 'school_type' => 'SD', 'npp' => "SD-$i"]);
+        }
+        for ($i = 1; $i <= 13; $i++) {
+            $p = Participant::create(['school_name' => "SMP $i", 'school_type' => 'SMP']);
+            Registration::create(['competition_id' => $competition->id, 'participant_id' => $p->id, 'school_type' => 'SMP', 'npp' => "SMP-$i"]);
+        }
+        for ($i = 1; $i <= 10; $i++) {
+            $p = Participant::create(['school_name' => "SMA $i", 'school_type' => 'SMA']);
+            Registration::create(['competition_id' => $competition->id, 'participant_id' => $p->id, 'school_type' => 'SMA', 'npp' => "SMA-$i"]);
+        }
+
+        // Render AdminSummary (bukan placeholder skeleton)
+        $component = new AdminSummary();
+        $view = $component->render();
+        $judgeProgress = $view->getData()['judgeProgress'];
+
+        $this->assertCount(1, $judgeProgress);
+        $this->assertSame('Juri 1', $judgeProgress[0]['label']);
+        // Juri hanya melayani 38 peserta untuk 1 kriteria, bukan 38 * 3 = 114
+        $this->assertSame(38, $judgeProgress[0]['max']);
+        $this->assertSame(0, $judgeProgress[0]['value']);
+    }
 }
